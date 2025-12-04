@@ -25,8 +25,8 @@ The easiest way to get started is using the dev container, which automatically s
 
 2. **Open in Dev Container:**
    ```bash
-   git clone https://github.com/jade-codes/memory-box.git
-   cd memory-box
+   git clone https://github.com/mem-box/mem-box.git
+   cd mem-box
    code .
    ```
    
@@ -70,8 +70,8 @@ Or download from [neo4j.com/download](https://neo4j.com/download/)
 
 ```bash
 # Clone the repository
-git clone https://github.com/jade-codes/memory-box.git
-cd memory-box
+git clone https://github.com/mem-box/mem-box.git
+cd mem-box
 
 # Install with uv (recommended)
 uv sync
@@ -128,6 +128,103 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 On Linux, the config is typically at: `~/.config/Claude/claude_desktop_config.json`
 
 After adding this, restart Claude Desktop. You'll see Memory Box tools available in your conversations!
+
+## VS Code Extension Setup
+
+Memory Box includes a VS Code extension that **automatically captures every command** you run in any integrated terminal.
+
+### Installation
+
+1. **Package the extension:**
+   ```bash
+   cd client/vscode
+   npm install
+   npm run compile
+   npx vsce package
+   ```
+
+2. **Install the `.vsix` file:**
+   - Open VS Code
+   - Go to Extensions view (`Cmd+Shift+X` / `Ctrl+Shift+X`)
+   - Click the `...` menu → "Install from VSIX..."
+   - Select `memory-box-vscode-0.1.0.vsix`
+
+3. **Configure settings** (optional - uses defaults if not set):
+   ```json
+   {
+     "memoryBox.neo4jUri": "bolt://localhost:7687",
+     "memoryBox.neo4jUser": "neo4j",
+     "memoryBox.neo4jPassword": "devpassword",
+     "memoryBox.autoCapture": true,
+     "memoryBox.captureExitCodeZeroOnly": true
+   }
+   ```
+
+### How It Works
+
+- **Automatic Capture**: Every command you run in **any VS Code terminal** is automatically saved
+- **Search**: Use `Cmd+Shift+P` → "Memory Box: Search Commands" to find and reuse commands
+- **Toggle**: Use "Memory Box: Toggle Auto-Capture" to temporarily disable/enable
+
+The extension uses VS Code's [Shell Integration](https://code.visualstudio.com/docs/terminal/shell-integration) to capture commands with exit codes, so it only works in VS Code's integrated terminals.
+
+## Shell Integration (Bash/Zsh)
+
+For automatic command capture in **any terminal** (outside of VS Code), use the shell integration scripts.
+
+### Easy Installation
+
+Simply run the installer script:
+```bash
+cd /path/to/memory-box
+./scripts/install-shell-integration.sh
+```
+
+The installer will:
+- Detect your shell (bash/zsh)
+- Backup your existing config
+- Add Memory Box integration to `~/.bashrc` or `~/.zshrc`
+- Ask if you want to only capture successful commands
+
+Then reload your shell or open a new terminal, and you're done!
+
+### Manual Setup (Alternative)
+
+If you prefer manual installation:
+
+**Bash** - Add to your `~/.bashrc`:
+```bash
+# Memory Box - Auto-capture commands
+source /path/to/memory-box/scripts/shell/bash-integration.sh
+```
+
+**Zsh** - Add to your `~/.zshrc`:
+```zsh
+# Memory Box - Auto-capture commands
+source /path/to/memory-box/scripts/shell/zsh-integration.zsh
+```
+
+Optionally configure:
+```bash
+# Only capture successful commands (exit code 0)
+export MEMORY_BOX_CAPTURE_SUCCESS_ONLY=1
+
+# Use specific Python executable
+export MEMORY_BOX_PYTHON=/path/to/python3
+```
+
+### How It Works
+
+- **Bash**: Uses `DEBUG` trap and `PROMPT_COMMAND` to capture commands and exit codes
+- **Zsh**: Uses `preexec` and `precmd` hooks for command capture
+- **Async**: Runs in background so it doesn't slow down your prompt
+- **Smart filtering**: Skips empty commands and internal shell operations
+
+After installation, **every command you run** in your terminal will be automatically saved to Memory Box!
+
+### Uninstalling
+
+To remove shell integration, simply delete the Memory Box block from your `~/.bashrc` or `~/.zshrc` (the installer creates a backup for safety).
 
 ## CLI Commands
 
@@ -242,8 +339,8 @@ memory-box/
 
 ```bash
 # Clone and enter the repository
-git clone https://github.com/jade-codes/memory-box.git
-cd memory-box
+git clone https://github.com/mem-box/mem-box.git
+cd mem-box
 
 # Start Neo4j database
 docker-compose -f .devcontainer/docker-compose.yml up -d neo4j

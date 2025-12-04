@@ -281,5 +281,33 @@ def suggest() -> None:
     mb.close()
 
 
+@app.command()
+def capture(
+    command: str = typer.Argument(..., help="The command that was executed"),
+    exit_code: int = typer.Option(..., "--exit-code", help="Exit code of the command"),
+    cwd: str = typer.Option(..., "--cwd", help="Working directory where command was run"),
+    success_only: bool = typer.Option(
+        False, "--success-only", help="Only capture successful commands (exit code 0)"
+    ),
+) -> None:
+    """Capture a command from shell integration (used by bash/zsh hooks)."""
+    # Skip empty commands
+    if not command or not command.strip():
+        return
+
+    # Skip failed commands if in success-only mode
+    if success_only and exit_code != 0:
+        return
+
+    mb = get_memory_box()
+
+    # Determine category based on exit code
+    category = "success" if exit_code == 0 else "failed"
+
+    # Capture command silently
+    mb.add_command(command, description="", context=cwd, category=category)
+    mb.close()
+
+
 if __name__ == "__main__":
     app()
