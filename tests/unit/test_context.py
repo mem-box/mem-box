@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from memory_box.context import (
+from server.context import (
     detect_os,
     detect_project_type,
     format_context_info,
@@ -117,7 +117,7 @@ class TestDetectProjectType:
         (tmp_path / "Makefile").touch()
         assert detect_project_type(str(tmp_path)) == "node"
 
-    @patch("memory_box.context.Path.cwd")
+    @patch("server.context.Path.cwd")
     def test_default_directory(self, mock_cwd: Mock, tmp_path: Path) -> None:
         """Test using current working directory when no directory provided."""
         mock_cwd.return_value = tmp_path
@@ -128,9 +128,9 @@ class TestDetectProjectType:
 class TestGetCurrentContext:
     """Tests for get_current_context function."""
 
-    @patch("memory_box.context.detect_project_type")
-    @patch("memory_box.context.detect_os")
-    @patch("memory_box.context.Path.cwd")
+    @patch("server.context.detect_project_type")
+    @patch("server.context.detect_os")
+    @patch("server.context.Path.cwd")
     def test_get_current_context(
         self, mock_cwd: Mock, mock_detect_os: Mock, mock_detect_project_type: Mock
     ) -> None:

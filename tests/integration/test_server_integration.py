@@ -2,9 +2,9 @@
 
 import pytest
 
-from memory_box.config import get_settings
-from memory_box.database import Neo4jClient
-from memory_box.server import (
+from lib.config import get_settings
+from lib.database import Neo4jClient
+from server.server import (
     add_command,
     delete_command,
     get_command_by_id,

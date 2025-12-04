@@ -1,6 +1,6 @@
 """Unit tests for secret obfuscation."""
 
-from memory_box.database import _obfuscate_secrets
+from lib.database import _obfuscate_secrets
 
 
 class TestObfuscateSecrets:

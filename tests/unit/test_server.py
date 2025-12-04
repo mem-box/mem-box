@@ -5,9 +5,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from lib.models import CommandWithMetadata
+
 # Import the functions - they're wrapped by FastMCP decorator, so we access the underlying function
-from memory_box import server
-from memory_box.models import CommandWithMetadata
+from server import server
 
 
 @pytest.fixture
@@ -36,8 +37,8 @@ def sample_command() -> CommandWithMetadata:
 class TestAddCommand:
     """Tests for add_command function."""
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_add_command_minimal(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:
@@ -53,8 +54,8 @@ class TestAddCommand:
         assert "✓" in result
         mock_db.add_command.assert_called_once()
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_add_command_with_tags(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:
@@ -71,7 +72,7 @@ class TestAddCommand:
         cmd = mock_db.add_command.call_args[0][0]
         assert cmd.tags == ["docker", "containers"]
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_add_command_no_auto_context(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test adding a command without auto-context detection."""
         mock_get_db.return_value = mock_db
@@ -83,8 +84,8 @@ class TestAddCommand:
 
         assert "test-id-789" in result
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_add_command_with_all_fields(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:
@@ -109,7 +110,7 @@ class TestAddCommand:
 class TestSearchCommands:
     """Tests for search_commands function."""
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_search_with_query(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
@@ -123,7 +124,7 @@ class TestSearchCommands:
         assert "git status" in result
         assert "test-123" in result
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_search_no_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test searching with no results."""
         mock_get_db.return_value = mock_db
@@ -133,8 +134,8 @@ class TestSearchCommands:
 
         assert "No commands found" in result
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_search_with_current_context(
         self,
         mock_context: Mock,
@@ -151,7 +152,7 @@ class TestSearchCommands:
 
         assert "Found 1 command(s)" in result
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_search_with_filters(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
@@ -172,7 +173,7 @@ class TestSearchCommands:
 class TestGetCommandById:
     """Tests for get_command_by_id function."""
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_get_existing_command(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
@@ -186,7 +187,7 @@ class TestGetCommandById:
         assert "test-123" in result
         assert "Used: 5 time(s)" in result
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_get_nonexistent_command(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test getting a nonexistent command."""
         mock_get_db.return_value = mock_db
@@ -200,7 +201,7 @@ class TestGetCommandById:
 class TestDeleteCommand:
     """Tests for delete_command function."""
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_delete_existing_command(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test deleting an existing command."""
         mock_get_db.return_value = mock_db
@@ -212,7 +213,7 @@ class TestDeleteCommand:
         assert "deleted successfully" in result
         mock_db.delete_command.assert_called_once_with("test-123")
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_delete_nonexistent_command(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test deleting a nonexistent command."""
         mock_get_db.return_value = mock_db
@@ -227,7 +228,7 @@ class TestDeleteCommand:
 class TestListTags:
     """Tests for list_tags function."""
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_list_tags_with_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing tags with results."""
         mock_get_db.return_value = mock_db
@@ -240,7 +241,7 @@ class TestListTags:
         assert "docker" in result
         assert "kubernetes" in result
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_list_tags_empty(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing tags when there are none."""
         mock_get_db.return_value = mock_db
@@ -254,7 +255,7 @@ class TestListTags:
 class TestListCategories:
     """Tests for list_categories function."""
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_list_categories_with_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing categories with results."""
         mock_get_db.return_value = mock_db
@@ -266,7 +267,7 @@ class TestListCategories:
         assert "git" in result
         assert "docker" in result
 
-    @patch("memory_box.server.get_memory_box")
+    @patch("server.server.get_memory_box")
     def test_list_categories_empty(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing categories when there are none."""
         mock_get_db.return_value = mock_db
@@ -280,8 +281,8 @@ class TestListCategories:
 class TestGetContextSuggestions:
     """Tests for get_context_suggestions function."""
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_suggestions_with_results(
         self,
         mock_context: Mock,
@@ -301,8 +302,8 @@ class TestGetContextSuggestions:
         assert "python" in result
         assert "git status" in result
 
-    @patch("memory_box.server.get_memory_box")
-    @patch("memory_box.server.get_current_context")
+    @patch("server.server.get_memory_box")
+    @patch("server.server.get_current_context")
     def test_suggestions_no_results(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:

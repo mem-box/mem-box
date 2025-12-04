@@ -30,9 +30,12 @@ dev = [
 ]
 
 [project.scripts]
-memory-box = "memory_box.cli:app"
-memory-box-server = "memory_box.server:main"
-memory-box-bridge = "memory_box.bridge:main"
+memory-box = "server.cli:app"
+memory-box-server = "server.server:main"
+memory-box-bridge = "server.bridge:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lib", "server"]
 
 [tool.ruff]
 line-length = 100
@@ -140,7 +143,8 @@ python_functions = ["test_*"]
 addopts = [
     "-v",
     "--strict-markers",
-    "--cov=memory_box",
+    "--cov=lib",
+    "--cov=server",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=80",
@@ -148,7 +152,7 @@ addopts = [
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["memory_box"]
+source = ["lib", "server"]
 omit = ["tests/*"]
 
 [tool.coverage.report]

@@ -11,21 +11,26 @@ dev-install:  ## Install development dependencies
 
 lint:  ## Run ruff linting
 	uv run ruff check .
+	cd client/vscode && npm run lint
 
 lint-fix:  ## Run ruff linting with auto-fix
 	uv run ruff check --fix .
 
 format:  ## Format code with ruff
 	uv run ruff format .
+	cd client/vscode && npm run format || true
 
 format-check:  ## Check code formatting
 	uv run ruff format --check .
+	cd client/vscode && npm run format-check || true
 
 typecheck:  ## Run mypy type checking
-	uv run mypy memory_box
+	uv run mypy lib server
+	cd client/vscode && npm run compile
 
 test:  ## Run tests
 	uv run pytest
+	cd client/vscode && npm test || echo "No TS tests yet"
 
 test-cov:  ## Run tests with coverage report
 	uv run pytest --cov-report=html

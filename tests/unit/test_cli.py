@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 import pytest
 from typer.testing import CliRunner
 
-from memory_box.cli import app
-from memory_box.models import CommandWithMetadata
+from lib.models import CommandWithMetadata
+from server.cli import app
 
 runner = CliRunner()
 
@@ -40,8 +40,8 @@ def sample_command() -> CommandWithMetadata:
 class TestAddCommand:
     """Tests for add command."""
 
-    @patch("memory_box.cli.get_memory_box")
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_memory_box")
+    @patch("server.cli.get_current_context")
     def test_add_command_minimal(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:
@@ -58,8 +58,8 @@ class TestAddCommand:
         mock_db.add_command.assert_called_once()
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_memory_box")
+    @patch("server.cli.get_current_context")
     def test_add_command_with_tags(
         self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock
     ) -> None:
@@ -87,7 +87,7 @@ class TestAddCommand:
         cmd = mock_db.add_command.call_args[0][0]
         assert cmd.tags == ["docker", "containers"]
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_add_command_no_auto_context(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test adding a command without auto-context detection."""
         mock_get_db.return_value = mock_db
@@ -101,7 +101,7 @@ class TestAddCommand:
 class TestSearchCommand:
     """Tests for search command."""
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_search_with_query(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
@@ -115,7 +115,7 @@ class TestSearchCommand:
         assert "Found 1 command(s)" in result.stdout
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_search_no_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test searching with no results."""
         mock_get_db.return_value = mock_db
@@ -126,8 +126,8 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "No commands found" in result.stdout
 
-    @patch("memory_box.cli.get_memory_box")
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_memory_box")
+    @patch("server.cli.get_current_context")
     def test_search_with_current_context(
         self,
         mock_context: Mock,
@@ -148,7 +148,7 @@ class TestSearchCommand:
 class TestGetCommand:
     """Tests for get command."""
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_get_existing_command(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
@@ -162,7 +162,7 @@ class TestGetCommand:
         assert "git status" in result.stdout
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_get_nonexistent_command(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test getting a nonexistent command."""
         mock_get_db.return_value = mock_db
@@ -177,7 +177,7 @@ class TestGetCommand:
 class TestDeleteCommand:
     """Tests for delete command."""
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_delete_existing_command(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test deleting an existing command."""
         mock_get_db.return_value = mock_db
@@ -189,7 +189,7 @@ class TestDeleteCommand:
         assert "deleted" in result.stdout
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_delete_cancelled(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test cancelling a delete operation."""
         mock_get_db.return_value = mock_db
@@ -204,7 +204,7 @@ class TestDeleteCommand:
 class TestTagsCommand:
     """Tests for tags command."""
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_list_tags(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing all tags."""
         mock_get_db.return_value = mock_db
@@ -217,7 +217,7 @@ class TestTagsCommand:
         assert "docker" in result.stdout
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_list_tags_empty(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing tags when there are none."""
         mock_get_db.return_value = mock_db
@@ -232,7 +232,7 @@ class TestTagsCommand:
 class TestCategoriesCommand:
     """Tests for categories command."""
 
-    @patch("memory_box.cli.get_memory_box")
+    @patch("server.cli.get_memory_box")
     def test_list_categories(self, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test listing all categories."""
         mock_get_db.return_value = mock_db
@@ -248,7 +248,7 @@ class TestCategoriesCommand:
 class TestContextCommand:
     """Tests for context command."""
 
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_current_context")
     def test_show_context(self, mock_context: Mock) -> None:
         """Test showing current context."""
         mock_context.return_value = {
@@ -267,8 +267,8 @@ class TestContextCommand:
 class TestSuggestCommand:
     """Tests for suggest command."""
 
-    @patch("memory_box.cli.get_memory_box")
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_memory_box")
+    @patch("server.cli.get_current_context")
     def test_suggest_with_results(
         self,
         mock_context: Mock,
@@ -287,8 +287,8 @@ class TestSuggestCommand:
         assert "git status" in result.stdout
         mock_db.close.assert_called_once()
 
-    @patch("memory_box.cli.get_memory_box")
-    @patch("memory_box.cli.get_current_context")
+    @patch("server.cli.get_memory_box")
+    @patch("server.cli.get_current_context")
     def test_suggest_no_results(self, mock_context: Mock, mock_get_db: Mock, mock_db: Mock) -> None:
         """Test getting suggestions with no results."""
         mock_get_db.return_value = mock_db

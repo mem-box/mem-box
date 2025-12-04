@@ -5,14 +5,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory_box.api import MemoryBox
-from memory_box.models import Command, CommandWithMetadata
+from lib.api import MemoryBox
+from lib.models import Command, CommandWithMetadata
 
 
 @pytest.fixture
 def mock_client():
     """Create a mock Neo4jClient."""
-    with patch("memory_box.api.Neo4jClient") as mock:
+    with patch("lib.api.Neo4jClient") as mock:
         yield mock
 
 
@@ -43,7 +43,7 @@ def test_memory_box_initialization_with_custom_params(mock_client):
 
 def test_add_command_with_string():
     """Test adding a command with simple string input."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.add_command.return_value = "test-id-123"
         mock_client.return_value = mock_instance
@@ -64,7 +64,7 @@ def test_add_command_with_string():
 
 def test_add_command_with_command_object():
     """Test adding a command with Command model object."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.add_command.return_value = "test-id-456"
         mock_client.return_value = mock_instance
@@ -79,7 +79,7 @@ def test_add_command_with_command_object():
 
 def test_add_command_with_all_parameters():
     """Test adding a command with all optional parameters."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.add_command.return_value = "test-id-789"
         mock_client.return_value = mock_instance
@@ -106,7 +106,7 @@ def test_add_command_with_all_parameters():
 
 def test_search_commands_default_fuzzy(sample_datetime):
     """Test search with default fuzzy matching enabled."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_result = CommandWithMetadata(
             id="1",
@@ -137,7 +137,7 @@ def test_search_commands_default_fuzzy(sample_datetime):
 
 def test_search_commands_with_filters():
     """Test search with all filter parameters."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.search_commands.return_value = []
         mock_client.return_value = mock_instance
@@ -166,7 +166,7 @@ def test_search_commands_with_filters():
 
 def test_get_command(sample_datetime):
     """Test retrieving a specific command by ID."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_result = CommandWithMetadata(
             id="test-123",
@@ -191,7 +191,7 @@ def test_get_command(sample_datetime):
 
 def test_get_command_not_found():
     """Test get_command returns None when command not found."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.get_command.return_value = None
         mock_client.return_value = mock_instance
@@ -204,7 +204,7 @@ def test_get_command_not_found():
 
 def test_list_commands_no_filters():
     """Test listing all commands without filters."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.search_commands.return_value = []
         mock_client.return_value = mock_instance
@@ -225,7 +225,7 @@ def test_list_commands_no_filters():
 
 def test_list_commands_with_filters():
     """Test listing commands with filters."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.search_commands.return_value = []
         mock_client.return_value = mock_instance
@@ -246,7 +246,7 @@ def test_list_commands_with_filters():
 
 def test_delete_command_success():
     """Test deleting a command successfully."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.delete_command.return_value = True
         mock_client.return_value = mock_instance
@@ -260,7 +260,7 @@ def test_delete_command_success():
 
 def test_delete_command_not_found():
     """Test delete_command returns False when command not found."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.delete_command.return_value = False
         mock_client.return_value = mock_instance
@@ -273,7 +273,7 @@ def test_delete_command_not_found():
 
 def test_context_manager():
     """Test MemoryBox works as a context manager."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_client.return_value = mock_instance
 
@@ -285,7 +285,7 @@ def test_context_manager():
 
 def test_increment_use_count(sample_datetime):
     """Test incrementing use count for a command."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.get_command.return_value = CommandWithMetadata(
             id="test-123",
@@ -306,7 +306,7 @@ def test_increment_use_count(sample_datetime):
 
 def test_increment_use_count_not_found():
     """Test increment_use_count returns False when command not found."""
-    with patch("memory_box.api.Neo4jClient") as mock_client:
+    with patch("lib.api.Neo4jClient") as mock_client:
         mock_instance = MagicMock()
         mock_instance.get_command.return_value = None
         mock_client.return_value = mock_instance

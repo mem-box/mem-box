@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from memory_box.config import Settings, get_settings
+from lib.config import Settings, get_settings
 
 
 class TestSettings:

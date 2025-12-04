@@ -3,9 +3,9 @@
 import pytest
 from typer.testing import CliRunner
 
-from memory_box.cli import app
-from memory_box.config import get_settings
-from memory_box.database import Neo4jClient
+from lib.config import get_settings
+from lib.database import Neo4jClient
+from server.cli import app
 
 
 @pytest.fixture(scope="module")

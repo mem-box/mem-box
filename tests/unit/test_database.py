@@ -4,9 +4,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from memory_box.config import Settings
-from memory_box.database import Neo4jClient
-from memory_box.models import Command, CommandWithMetadata
+from lib.config import Settings
+from lib.database import Neo4jClient
+from lib.models import Command, CommandWithMetadata
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def mock_session() -> Mock:
 class TestNeo4jClient:
     """Tests for Neo4jClient class."""
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_client_initialization(
         self,
         mock_graph_database: Mock,
@@ -57,7 +57,7 @@ class TestNeo4jClient:
         )
         assert client.database == "test_db"
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_client_close(
         self,
         mock_graph_database: Mock,
@@ -74,8 +74,8 @@ class TestNeo4jClient:
 
         mock_driver.close.assert_called_once()
 
-    @patch("memory_box.database.GraphDatabase")
-    @patch("memory_box.database.uuid.uuid4")
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
     def test_add_command(
         self,
         mock_uuid: Mock,
@@ -104,7 +104,7 @@ class TestNeo4jClient:
         assert command_id == "test-uuid-123"
         mock_session.run.assert_called()
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_search_commands_with_query(
         self,
         mock_graph_database: Mock,
@@ -145,7 +145,7 @@ class TestNeo4jClient:
         assert isinstance(commands[0], CommandWithMetadata)
         assert commands[0].command == "git status"
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_search_commands_no_results(
         self,
         mock_graph_database: Mock,
@@ -163,7 +163,7 @@ class TestNeo4jClient:
 
         assert commands == []
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_get_command_found(
         self,
         mock_graph_database: Mock,
@@ -204,7 +204,7 @@ class TestNeo4jClient:
         assert cmd.id == "test-id"
         assert cmd.command == "docker ps"
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_get_command_not_found(
         self,
         mock_graph_database: Mock,
@@ -222,7 +222,7 @@ class TestNeo4jClient:
 
         assert cmd is None
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_delete_command_success(
         self,
         mock_graph_database: Mock,
@@ -243,7 +243,7 @@ class TestNeo4jClient:
 
         assert result is True
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_delete_command_not_found(
         self,
         mock_graph_database: Mock,
@@ -264,7 +264,7 @@ class TestNeo4jClient:
 
         assert result is False
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_get_all_tags(
         self,
         mock_graph_database: Mock,
@@ -284,7 +284,7 @@ class TestNeo4jClient:
 
         assert tags == ["git", "docker", "python"]
 
-    @patch("memory_box.database.GraphDatabase")
+    @patch("lib.database.GraphDatabase")
     def test_get_all_categories(
         self,
         mock_graph_database: Mock,

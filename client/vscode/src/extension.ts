@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MemoryBoxClient } from './memory-box-client';
+import { MemoryBoxClient } from './client';
 
 let memoryBoxClient: MemoryBoxClient | undefined;
 let autoCapture = true;
@@ -134,7 +134,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 vscode.window.showInformationMessage('Command copied to clipboard');
                                 break;
 
-                            case 'insert':
+                            case 'insert': {
                                 const activeTerminal = vscode.window.activeTerminal;
                                 if (activeTerminal) {
                                     activeTerminal.sendText(selected.label, false);
@@ -142,12 +142,14 @@ export function activate(context: vscode.ExtensionContext) {
                                     vscode.window.showWarningMessage('No active terminal');
                                 }
                                 break;
+                            }
 
-                            case 'run':
+                            case 'run': {
                                 const newTerminal = vscode.window.createTerminal('Memory Box');
                                 newTerminal.show();
                                 newTerminal.sendText(selected.label);
                                 break;
+                            }
                         }
                     }
                 }

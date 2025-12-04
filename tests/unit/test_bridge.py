@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from memory_box.bridge import handle_request, main, write_response
-from memory_box.models import Command
+from lib.models import Command
+from server.bridge import handle_request, main, write_response
 
 
 @pytest.fixture
@@ -183,9 +183,10 @@ class TestWriteResponse:
 class TestMain:
     """Tests for main function."""
 
+    @patch("sys.argv", ["bridge.py"])
     @patch("sys.stdin", new_callable=StringIO)
     @patch("sys.stdout", new_callable=StringIO)
-    @patch("memory_box.bridge.MemoryBox")
+    @patch("server.bridge.MemoryBox")
     def test_main_ping(self, mock_mb_class, mock_stdout, mock_stdin):
         """Test main function with ping request."""
         mock_mb = MagicMock()
@@ -209,9 +210,10 @@ class TestMain:
         assert data["error"] is None
         mock_mb.close.assert_called_once()
 
+    @patch("sys.argv", ["bridge.py"])
     @patch("sys.stdin", new_callable=StringIO)
     @patch("sys.stdout", new_callable=StringIO)
-    @patch("memory_box.bridge.MemoryBox")
+    @patch("server.bridge.MemoryBox")
     def test_main_multiple_requests(self, mock_mb_class, mock_stdout, mock_stdin):
         """Test main function with multiple requests."""
         mock_mb = MagicMock()
@@ -241,9 +243,10 @@ class TestMain:
         data2 = json.loads(lines[1])
         assert data2["result"] == ["tag1", "tag2"]
 
+    @patch("sys.argv", ["bridge.py"])
     @patch("sys.stdin", new_callable=StringIO)
     @patch("sys.stdout", new_callable=StringIO)
-    @patch("memory_box.bridge.MemoryBox")
+    @patch("server.bridge.MemoryBox")
     def test_main_invalid_json(self, mock_mb_class, mock_stdout, mock_stdin):
         """Test main function with invalid JSON."""
         mock_mb = MagicMock()
@@ -266,9 +269,10 @@ class TestMain:
         assert data["result"] is None
         assert "Invalid JSON" in data["error"]
 
+    @patch("sys.argv", ["bridge.py"])
     @patch("sys.stdin", new_callable=StringIO)
     @patch("sys.stdout", new_callable=StringIO)
-    @patch("memory_box.bridge.MemoryBox")
+    @patch("server.bridge.MemoryBox")
     def test_main_method_error(self, mock_mb_class, mock_stdout, mock_stdin):
         """Test main function when method raises error."""
         mock_mb = MagicMock()
@@ -292,9 +296,10 @@ class TestMain:
         assert data["result"] is None
         assert "Database error" in data["error"]
 
+    @patch("sys.argv", ["bridge.py"])
     @patch("sys.stdin", new_callable=StringIO)
     @patch("sys.stdout", new_callable=StringIO)
-    @patch("memory_box.bridge.MemoryBox")
+    @patch("server.bridge.MemoryBox")
     def test_main_empty_lines(self, mock_mb_class, mock_stdout, mock_stdin):
         """Test main function handles empty lines gracefully."""
         mock_mb = MagicMock()

@@ -9,8 +9,8 @@ from neo4j import Driver, GraphDatabase
 from neo4j.time import DateTime as Neo4jDateTime
 from rapidfuzz import fuzz
 
-from memory_box.config import Settings
-from memory_box.models import Command, CommandWithMetadata
+from lib.config import Settings
+from lib.models import Command, CommandWithMetadata
 
 
 def _convert_neo4j_datetime(value: datetime | Neo4jDateTime | None) -> datetime | None:

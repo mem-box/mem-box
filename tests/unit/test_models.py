@@ -5,7 +5,7 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from memory_box.models import Command, CommandWithMetadata
+from lib.models import Command, CommandWithMetadata
 
 
 class TestCommand:

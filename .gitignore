@@ -10,7 +10,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -49,6 +48,7 @@ Thumbs.db
 node_modules/
 .node_modules/
 built/*
+out/
 tests/cases/rwc/*
 tests/cases/perf/*
 !tests/cases/webharness/compilerToString.js
@@ -111,4 +111,3 @@ TEST-results.xml
 package-lock.json
 .eslintcache
 *v8.log
-/lib/

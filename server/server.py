@@ -2,22 +2,19 @@
 
 from fastmcp import FastMCP
 
-from memory_box.api import MemoryBox
-from memory_box.context import get_current_context
-from memory_box.models import Command
+from lib.api import MemoryBox
+from lib.models import Command
+from server.context import get_current_context
 
 # Initialize FastMCP server
 mcp = FastMCP("Memory Box")
 
-# Global Memory Box client (will be initialized on startup)
-memory_box: MemoryBox | None = None
+# Global Memory Box client
+memory_box = MemoryBox()
 
 
 def get_memory_box() -> MemoryBox:
     """Get the Memory Box API client."""
-    global memory_box
-    if memory_box is None:
-        memory_box = MemoryBox()
     return memory_box
 
 
@@ -76,6 +73,21 @@ def add_command(
     return f"✓ Command added successfully! ID: {command_id}"
 
 
+def _resolve_search_context(
+    os: str | None, project_type: str | None, use_current_context: bool
+) -> tuple[str | None, str | None]:
+    """Resolve OS and project type from current context if needed."""
+    if not use_current_context:
+        return os, project_type
+
+    current_context = get_current_context()
+    resolved_os = os if os is not None else current_context.get("os")
+    resolved_project = (
+        project_type if project_type is not None else current_context.get("project_type")
+    )
+    return resolved_os, resolved_project
+
+
 @mcp.tool()
 def search_commands(
     query: str | None = None,
@@ -103,13 +115,8 @@ def search_commands(
     """
     mb = get_memory_box()
 
-    # Use current context if requested
-    if use_current_context:
-        current_context = get_current_context()
-        if os is None:
-            os = current_context.get("os")
-        if project_type is None:
-            project_type = current_context.get("project_type")
+    # Resolve context if needed
+    os, project_type = _resolve_search_context(os, project_type, use_current_context)
 
     commands = mb.search_commands(
         query=query, os=os, project_type=project_type, category=category, tags=tags, limit=limit

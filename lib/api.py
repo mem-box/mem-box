@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from memory_box.config import Settings
-from memory_box.database import Neo4jClient
-from memory_box.models import Command, CommandWithMetadata
+from lib.config import Settings
+from lib.database import Neo4jClient
+from lib.models import Command, CommandWithMetadata
 
 
 class MemoryBox:

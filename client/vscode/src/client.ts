@@ -39,19 +39,19 @@ interface Command {
 
 interface BridgeRequest {
     method: string;
-    params: Record<string, any>;
+    params: Record<string, unknown>;
 }
 
 interface BridgeResponse {
-    result: any;
+    result: unknown;
     error: string | null;
 }
 
 export class MemoryBoxClient {
     private process: ChildProcess | null = null;
     private pendingRequests: Map<number, {
-        resolve: (value: any) => void;
-        reject: (reason: any) => void;
+        resolve: (value: unknown) => void;
+        reject: (reason: Error) => void;
     }> = new Map();
     private requestId = 0;
     private buffer = '';
@@ -68,7 +68,7 @@ export class MemoryBoxClient {
     }): Promise<void> {
         return new Promise((resolve, reject) => {
             // Build args
-            const args = ['-m', 'memory_box.bridge'];
+            const args = ['-m', 'server.bridge'];
             if (config?.neo4jUri) {
                 args.push('--neo4j-uri', config.neo4jUri);
             }
@@ -110,15 +110,36 @@ export class MemoryBoxClient {
      */
     async stop(): Promise<void> {
         if (this.process) {
-            this.process.kill();
-            this.process = null;
+            return new Promise<void>((resolve) => {
+                if (!this.process) {
+                    resolve();
+                    return;
+                }
+
+                const timeoutId = setTimeout(() => {
+                    if (this.process) {
+                        this.process.kill('SIGKILL');
+                    }
+                }, 1000);
+
+                this.process.once('exit', () => {
+                    clearTimeout(timeoutId);
+                    if (this.process) {
+                        this.process.removeAllListeners();
+                        this.process = null;
+                    }
+                    resolve();
+                });
+
+                this.process.kill();
+            });
         }
     }
 
     /**
      * Send a request to the bridge
      */
-    private async sendRequest(method: string, params: Record<string, any> = {}): Promise<any> {
+    private async sendRequest(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
         if (!this.process || !this.process.stdin) {
             throw new Error('Bridge process not started');
         }
@@ -158,7 +179,7 @@ export class MemoryBoxClient {
             const line = this.buffer.substring(0, newlineIndex).trim();
             this.buffer = this.buffer.substring(newlineIndex + 1);
 
-            if (!line) continue;
+            if (!line) { continue; }
 
             try {
                 const response: BridgeResponse = JSON.parse(line);
@@ -173,16 +194,20 @@ export class MemoryBoxClient {
      * Handle a bridge response
      */
     private handleResponse(response: BridgeResponse): void {
-        // For simplicity, resolve the first pending request
-        // In a real implementation, you'd use request IDs
-        const firstRequest = this.pendingRequests.values().next().value;
-        if (firstRequest) {
-            this.pendingRequests.clear();
+        // Responses are handled in FIFO order (first request gets first response)
+        const firstRequestId = this.pendingRequests.keys().next().value;
 
-            if (response.error) {
-                firstRequest.reject(new Error(response.error));
-            } else {
-                firstRequest.resolve(response.result);
+        if (firstRequestId !== undefined) {
+            const firstRequest = this.pendingRequests.get(firstRequestId);
+
+            if (firstRequest) {
+                this.pendingRequests.delete(firstRequestId);
+
+                if (response.error) {
+                    firstRequest.reject(new Error(response.error));
+                } else {
+                    firstRequest.resolve(response.result);
+                }
             }
         }
     }
@@ -191,7 +216,7 @@ export class MemoryBoxClient {
      * Test connection to the bridge
      */
     async ping(): Promise<string> {
-        return this.sendRequest('ping');
+        return this.sendRequest('ping') as Promise<string>;
     }
 
     /**
@@ -212,7 +237,7 @@ export class MemoryBoxClient {
             command,
             description,
             ...options,
-        });
+        }) as Promise<string>;
     }
 
     /**
@@ -232,7 +257,7 @@ export class MemoryBoxClient {
         return this.sendRequest('search_commands', {
             query,
             ...options,
-        });
+        }) as Promise<Command[]>;
     }
 
     /**
@@ -241,7 +266,7 @@ export class MemoryBoxClient {
     async getCommand(commandId: string): Promise<Command | null> {
         return this.sendRequest('get_command', {
             command_id: commandId,
-        });
+        }) as Promise<Command | null>;
     }
 
     /**
@@ -256,7 +281,7 @@ export class MemoryBoxClient {
             limit?: number;
         } = {}
     ): Promise<Command[]> {
-        return this.sendRequest('list_commands', options);
+        return this.sendRequest('list_commands', options) as Promise<Command[]>;
     }
 
     /**
@@ -265,54 +290,20 @@ export class MemoryBoxClient {
     async deleteCommand(commandId: string): Promise<boolean> {
         return this.sendRequest('delete_command', {
             command_id: commandId,
-        });
+        }) as Promise<boolean>;
     }
 
     /**
      * Get all tags
      */
     async getAllTags(): Promise<string[]> {
-        return this.sendRequest('get_all_tags');
+        return this.sendRequest('get_all_tags') as Promise<string[]>;
     }
 
     /**
      * Get all categories
      */
     async getAllCategories(): Promise<string[]> {
-        return this.sendRequest('get_all_categories');
-    }
-}
-
-/**
- * Example usage in a VS Code extension
- */
-export async function exampleUsage() {
-    const client = new MemoryBoxClient();
-
-    try {
-        // Start the bridge
-        await client.start();
-        console.log('Memory Box bridge started');
-
-        // Add a command
-        const commandId = await client.addCommand(
-            'docker ps -a',
-            'List all containers',
-            { tags: ['docker', 'containers'] }
-        );
-        console.log('Added command:', commandId);
-
-        // Search with fuzzy matching
-        const results = await client.searchCommands('doker', { fuzzy: true });
-        console.log('Search results:', results);
-
-        // Get all tags
-        const tags = await client.getAllTags();
-        console.log('All tags:', tags);
-
-    } catch (error) {
-        console.error('Error:', error);
-    } finally {
-        await client.stop();
+        return this.sendRequest('get_all_categories') as Promise<string[]>;
     }
 }

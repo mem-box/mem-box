@@ -16,7 +16,7 @@ import json
 import sys
 from typing import Any
 
-from memory_box import MemoryBox
+from lib import MemoryBox
 
 
 def handle_request(mb: MemoryBox, request: dict[str, Any]) -> dict[str, Any]:

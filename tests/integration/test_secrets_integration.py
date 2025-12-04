@@ -5,9 +5,9 @@ from collections.abc import Generator
 
 import pytest
 
-from memory_box.config import Settings
-from memory_box.database import Neo4jClient
-from memory_box.models import Command
+from lib.config import Settings
+from lib.database import Neo4jClient
+from lib.models import Command
 
 # Check if Neo4j is available for integration tests
 SKIP_INTEGRATION = os.getenv("SKIP_INTEGRATION_TESTS", "false").lower() == "true"

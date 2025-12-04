@@ -5,9 +5,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from memory_box.api import MemoryBox
-from memory_box.context import get_current_context
-from memory_box.models import Command
+from lib.api import MemoryBox
+from lib.models import Command
+from server.context import get_current_context
 
 app = typer.Typer(
     name="memory-box",
