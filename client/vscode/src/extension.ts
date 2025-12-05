@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
+import {
+    OperationQueue,
+    processTerminalExecution,
+    queueCapture
+} from './capture';
 import { MemoryBoxClient } from './client';
 
 let memBoxClient: MemoryBoxClient | undefined;
 let autoCapture = true;
 
-export function activate(context: vscode.ExtensionContext) {
-    console.log('Mem Box extension is activating...');
+const captureQueue = new OperationQueue();
 
+export function activate(context: vscode.ExtensionContext) {
     // Load config
     const config = vscode.workspace.getConfiguration('memBox');
 
@@ -25,9 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
     // Start the bridge process with config
-    memBoxClient.start(dbConfig).then(() => {
-        console.log('Mem Box bridge started successfully');
-    }).catch((err) => {
+    memBoxClient.start(dbConfig).catch((err) => {
         console.error('Failed to start Mem Box bridge:', err);
         vscode.window.showErrorMessage(
             'Mem Box: Failed to start. Make sure mem-box is installed (pip install mem-box)'
@@ -45,33 +48,23 @@ export function activate(context: vscode.ExtensionContext) {
 
         const commandLine = event.execution.commandLine.value;
         const exitCode = event.exitCode;
-
-        // Skip if command is empty
-        if (!commandLine || commandLine.trim().length === 0) {
-            return;
-        }
-
-        // Check if we should only capture successful commands
-        const captureSuccessOnly = config.get('captureExitCodeZeroOnly', true);
-        if (captureSuccessOnly && exitCode !== 0) {
-            console.log(`Skipping failed command (exit ${exitCode}): ${commandLine}`);
-            return;
-        }
-
-        // Get workspace context
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        const context = workspaceFolder?.uri.fsPath;
+        const captureSuccessOnly = vscode.workspace.getConfiguration('memoryBox').get('captureExitCodeZeroOnly', false);
 
-        try {
-            const commandId = await memBoxClient.addCommand(commandLine, '', {
-                context,
-                category: exitCode === 0 ? 'success' : 'failed'
-            });
+        // Process the execution event
+        const result = processTerminalExecution(
+            commandLine,
+            exitCode,
+            workspaceFolder?.uri.fsPath,
+            captureSuccessOnly
+        );
 
-            console.log(`Captured command (${commandId}): ${commandLine}`);
-        } catch (err) {
-            console.error('Failed to capture command:', err);
+        if (!result) {
+            return;
         }
+
+        // Queue the capture to avoid overwhelming the system
+        queueCapture(captureQueue, memBoxClient, result);
     });
 
     // Register search command
@@ -233,8 +226,6 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
     );
-
-    console.log('Mem Box extension activated');
 }
 
 export function deactivate() {

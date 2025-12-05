@@ -1,0 +1,122 @@
+{
+    "$schema": "./project-types.schema.json",
+    "project_types": {
+        "node": {
+            "description": "Node.js / JavaScript / TypeScript projects",
+            "indicators": [
+                "package.json",
+                "yarn.lock",
+                "pnpm-lock.yaml"
+            ],
+            "tags": [
+                "javascript",
+                "nodejs"
+            ]
+        },
+        "rust": {
+            "description": "Rust projects",
+            "indicators": [
+                "Cargo.toml",
+                "Cargo.lock"
+            ],
+            "tags": [
+                "rust",
+                "cargo"
+            ]
+        },
+        "go": {
+            "description": "Go projects",
+            "indicators": [
+                "go.mod",
+                "go.sum"
+            ],
+            "tags": [
+                "golang",
+                "go"
+            ]
+        },
+        "python": {
+            "description": "Python projects",
+            "indicators": [
+                "pyproject.toml",
+                "setup.py",
+                "requirements.txt",
+                "Pipfile",
+                "poetry.lock"
+            ],
+            "tags": [
+                "python",
+                "pip"
+            ]
+        },
+        "java": {
+            "description": "Java / JVM projects",
+            "indicators": [
+                "pom.xml",
+                "build.gradle",
+                "build.gradle.kts"
+            ],
+            "tags": [
+                "java",
+                "jvm"
+            ]
+        },
+        "ruby": {
+            "description": "Ruby projects",
+            "indicators": [
+                "Gemfile",
+                "Gemfile.lock"
+            ],
+            "tags": [
+                "ruby",
+                "gem"
+            ]
+        },
+        "php": {
+            "description": "PHP projects",
+            "indicators": [
+                "composer.json",
+                "composer.lock"
+            ],
+            "tags": [
+                "php",
+                "composer"
+            ]
+        },
+        "dotnet": {
+            "description": ".NET / C# projects",
+            "indicators": [
+                ".csproj",
+                ".fsproj",
+                ".vbproj",
+                ".sln"
+            ],
+            "tags": [
+                "csharp",
+                "dotnet"
+            ]
+        },
+        "elixir": {
+            "description": "Elixir projects",
+            "indicators": [
+                "mix.exs",
+                "mix.lock"
+            ],
+            "tags": [
+                "elixir",
+                "mix"
+            ]
+        },
+        "makefile": {
+            "description": "Makefile-based projects",
+            "indicators": [
+                "Makefile",
+                "makefile"
+            ],
+            "tags": [
+                "make",
+                "build"
+            ]
+        }
+    }
+}

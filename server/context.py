@@ -3,6 +3,8 @@
 import platform
 from pathlib import Path
 
+from lib.config import INDICATOR_MAP
+
 
 def detect_os() -> str:
     """Detect the current operating system."""
@@ -30,26 +32,10 @@ def detect_project_type(directory: str | None = None) -> str | None:
 
     path = Path(directory)
 
-    # Map project indicators to project types
-    project_indicators = {
-        "package.json": "node",
-        "Cargo.toml": "rust",
-        "go.mod": "go",
-        "pyproject.toml": "python",
-        "setup.py": "python",
-        "pom.xml": "java",
-        "build.gradle": "java",
-        "Gemfile": "ruby",
-        "composer.json": "php",
-        ".csproj": "dotnet",
-        ".sln": "dotnet",
-        "mix.exs": "elixir",
-        "Makefile": "makefile",
-    }
-
-    for indicator, project_type in project_indicators.items():
+    # Check each indicator file
+    for indicator, project_type in INDICATOR_MAP.items():
         if (path / indicator).exists():
-            return project_type
+            return str(project_type)
 
     return None
 

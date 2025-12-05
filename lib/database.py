@@ -9,8 +9,36 @@ from neo4j import Driver, GraphDatabase
 from neo4j.time import DateTime as Neo4jDateTime
 from rapidfuzz import fuzz
 
-from lib.config import Settings
-from lib.models import Command, CommandWithMetadata, Stack
+from lib.config import CATEGORIES_MAP, COMMAND_MAP, SECRETS_PATTERNS, TAGS_MAP
+from lib.models import Command, CommandWithMetadata
+from lib.settings import Settings
+
+
+def _detect_category_and_tags(command: str) -> tuple[str | None, list[str]]:
+    """Detect category and tags from command text.
+
+    Args:
+        command: The command text
+
+    Returns:
+        Tuple of (category, tags). Category and tags are validated against config.
+    """
+    first_word = command.strip().split()[0] if command.strip() else ""
+    match = COMMAND_MAP.get(first_word)
+
+    if match:
+        category = match.get("category")
+        tags = match.get("tags", [])
+
+        # Validate category exists in categories.json
+        if category and category not in CATEGORIES_MAP:
+            category = None
+
+        # Filter out invalid tags not in tags.json
+        tags = [tag for tag in tags if tag in TAGS_MAP]
+
+        return category, tags
+    return None, []
 
 
 def _convert_neo4j_datetime(value: datetime | Neo4jDateTime | None) -> datetime | None:
@@ -22,32 +50,10 @@ def _convert_neo4j_datetime(value: datetime | Neo4jDateTime | None) -> datetime 
 
 def _obfuscate_secrets(command: str) -> str:
     """Obfuscate passwords and secrets in commands."""
-    # Pattern for common password/token flags and parameters
-    # Supports quoted values (single or double quotes) and unquoted values
-    patterns = [
-        # Flags like -p, --password followed by quoted values (with any content inside)
-        (r'''(-p|--password|--pass|--pwd)\s+"[^"]*"''', r"\1 ****"),
-        (r"""(-p|--password|--pass|--pwd)\s+'[^']*'""", r"\1 ****"),
-        # Flags followed by unquoted values
-        (r"(-p|--password|--pass|--pwd)\s+\S+", r"\1 ****"),
-        # Key=value with double quotes
-        (r'''(password=|pwd=|pass=)"[^"]*"''', r"\1****"),
-        (r'''(token=|api_key=|apikey=|secret=)"[^"]*"''', r"\1****"),
-        (r'''(NEO4J_PASSWORD=|DB_PASSWORD=|POSTGRES_PASSWORD=)"[^"]*"''', r"\1****"),
-        # Key=value with single quotes
-        (r"""(password=|pwd=|pass=)'[^']*'""", r"\1****"),
-        (r"""(token=|api_key=|apikey=|secret=)'[^']*'""", r"\1****"),
-        (r"""(NEO4J_PASSWORD=|DB_PASSWORD=|POSTGRES_PASSWORD=)'[^']*'""", r"\1****"),
-        # Key=value without quotes
-        (r"(password=|pwd=|pass=)\S+", r"\1****"),
-        (r"(token=|api_key=|apikey=|secret=)\S+", r"\1****"),
-        (r"(NEO4J_PASSWORD=|DB_PASSWORD=|POSTGRES_PASSWORD=)\S+", r"\1****"),
-        # Match passwords in URLs
-        (r"(://[^:]+:)([^@]+)(@)", r"\1****\3"),
-    ]
-
     obfuscated = command
-    for pattern, replacement in patterns:
+    for pattern_config in SECRETS_PATTERNS:
+        pattern = pattern_config["pattern"]
+        replacement = pattern_config["replacement"]
         obfuscated = re.sub(pattern, replacement, obfuscated, flags=re.IGNORECASE)
 
     return obfuscated.rstrip()
@@ -90,144 +96,155 @@ class Neo4jClient:
                 )
 
     def add_command(self, command: Command) -> str:
-        """Add a new command to the database."""
-        command_id = str(uuid.uuid4())
+        """Add a command or update execution stats if it already exists.
 
+        If a command with the same text already exists, this will:
+        - Increment execution_count
+        - Update description/context if they've changed
+        - Merge any new tags
+
+        If the command is new, it creates a new Command node.
+        """
         # Always strip secrets from command before storing
         command_text = _obfuscate_secrets(command.command)
 
+        # Auto-detect category and tags if not provided
+        detected_category, detected_tags = _detect_category_and_tags(command.command)
+
+        # Use detected category if not explicitly provided
+        category = command.category or detected_category
+
+        # Merge user-provided tags with auto-detected tags
+        all_tags = list(set(command.tags + detected_tags))
+
         with self.driver.session(database=self.database) as session:
-            session.run(
+            # Check if command already exists
+            result = session.run(
                 """
-                CREATE (c:Command {
-                    id: $id,
-                    command: $command,
-                    description: $description,
-                    os: $os,
-                    project_type: $project_type,
-                    context: $context,
-                    category: $category,
-                    created_at: datetime($created_at),
-                    last_used: NULL,
-                    use_count: 0
-                })
-                WITH c
-                UNWIND $tags AS tag
-                MERGE (t:Tag {name: tag})
-                MERGE (c)-[:TAGGED_WITH]->(t)
+                MATCH (c:Command {command: $command})
+                RETURN c.id as id
                 """,
-                id=command_id,
                 command=command_text,
-                description=command.description,
-                os=command.os,
-                project_type=command.project_type,
-                context=command.context,
-                category=command.category,
-                tags=command.tags,
-                created_at=datetime.now().astimezone().isoformat(),
             )
+            existing = result.single()
 
-        # Auto-detect and link to stacks based on command content
-        self._auto_link_stacks(command_id, command_text, command.tags, command.category)
+            if existing:
+                # Update existing command's execution statistics
+                command_id = existing["id"]
+                session.run(
+                    """
+                    MATCH (c:Command {id: $id})
+                    SET c.description = $description,
+                        c.context = $context,
+                        c.execution_count = c.execution_count + 1,
+                        c.success_count = c.success_count +
+                            CASE WHEN $status = 'success' THEN 1 ELSE 0 END,
+                        c.failure_count = c.failure_count +
+                            CASE WHEN $status = 'failed' THEN 1 ELSE 0 END
+                    WITH c
 
-        return command_id
+                    // Merge new tags (don't remove existing ones)
+                    UNWIND $tags AS tag
+                    MERGE (t:Tag {name: tag})
+                    MERGE (c)-[:TAGGED_WITH]->(t)
 
-    def _auto_link_stacks(
-        self, command_id: str, command: str, tags: list[str], category: str | None
-    ) -> None:
-        """Automatically detect and link command to relevant stacks."""
-        command_lower = command.lower()
-        all_tags = [t.lower() for t in tags] + ([category.lower()] if category else [])
+                    WITH c
+                    // Merge category relationship (command may gain new category)
+                    FOREACH (_ IN CASE WHEN $category IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (cat:Category {name: $category})
+                        MERGE (c)-[:HAS_CATEGORY]->(cat)
+                    )
 
-        # Check tags/category first for explicit stack hints
-        self._link_from_tags(command_id, all_tags)
+                    WITH c
+                    // Merge OS relationship (command may be run on multiple OSes)
+                    FOREACH (_ IN CASE WHEN $os IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (o:OS {name: $os})
+                        MERGE (c)-[:RUNS_ON]->(o)
+                    )
 
-        # Check command text for specific patterns
-        self._link_from_command_patterns(command_id, command_lower)
+                    WITH c
+                    // Merge project type relationship
+                    FOREACH (_ IN CASE WHEN $project_type IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (pt:ProjectType {name: $project_type})
+                        MERGE (c)-[:FOR_PROJECT]->(pt)
+                    )
+                    """,
+                    id=command_id,
+                    description=command.description,
+                    context=command.context,
+                    status=command.status,
+                    tags=all_tags,
+                    category=category,
+                    os=command.os,
+                    project_type=command.project_type,
+                )
+            else:
+                # Create new command
+                command_id = str(uuid.uuid4())
+                execution_count = 1 if command.status else 0
+                success_count = 1 if command.status == "success" else 0
+                failure_count = 1 if command.status == "failed" else 0
 
-    def _link_from_tags(self, command_id: str, tags: list[str]) -> None:
-        """Link command to stacks based on tags."""
-        tag_stack_map = {
-            "docker": ("Docker", "tool"),
-            "container": ("Docker", "tool"),
-            "python": ("Python", "language"),
-            "py": ("Python", "language"),
-            "node": ("Node", "language"),
-            "npm": ("Node", "language"),
-            "javascript": ("Node", "language"),
-            "js": ("Node", "language"),
-            "kubernetes": ("Kubernetes", "tool"),
-            "k8s": ("Kubernetes", "tool"),
-            "rust": ("Rust", "language"),
-            "cargo": ("Rust", "language"),
-            "git": ("Git", "tool"),
-        }
+                session.run(
+                    """
+                    CREATE (c:Command {
+                        id: $id,
+                        command: $command,
+                        description: $description,
+                        context: $context,
+                        created_at: datetime($created_at),
+                        last_used: NULL,
+                        use_count: 0,
+                        execution_count: $execution_count,
+                        success_count: $success_count,
+                        failure_count: $failure_count
+                    })
+                    WITH c
 
-        for tag in tags:
-            if tag in tag_stack_map:
-                stack_name, stack_type = tag_stack_map[tag]
-                self._ensure_stack_link(command_id, stack_name, stack_type, "RUN")
+                    // Create and link tags
+                    WITH c, $tags AS tag_list
+                    UNWIND CASE WHEN size(tag_list) > 0 THEN tag_list ELSE [null] END AS tag
+                    FOREACH (_ IN CASE WHEN tag IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (t:Tag {name: tag})
+                        MERGE (c)-[:TAGGED_WITH]->(t)
+                    )
 
-    def _link_from_command_patterns(self, command_id: str, command_lower: str) -> None:
-        """Link command to stacks based on command patterns."""
-        # Stack detection patterns: (keywords, stack_name, stack_type, relationship_type)
-        patterns = [
-            # Docker
-            (["docker build"], "Docker", "tool", "BUILD"),
-            (["docker run", "docker start", "docker compose up"], "Docker", "tool", "RUN"),
-            (["docker"], "Docker", "tool", "RUN"),  # fallback
-            # Python
-            (["pytest", "python -m pytest", "py.test"], "Python", "language", "TEST"),
-            (["python -m", "python3 -m"], "Python", "language", "RUN"),
-            (["pip install", "pip3 install"], "Python", "language", "BUILD"),
-            (["python", "python3"], "Python", "language", "RUN"),  # fallback
-            # Node/npm
-            (["npm run build", "yarn build"], "Node", "language", "BUILD"),
-            (["npm test", "yarn test"], "Node", "language", "TEST"),
-            (["npm run", "yarn run"], "Node", "language", "RUN"),
-            (["npm install", "yarn install"], "Node", "language", "BUILD"),
-            # Git
-            (["git push", "git pull"], "Git", "tool", "DEPLOY"),
-            (["git commit"], "Git", "tool", "BUILD"),
-            (["git"], "Git", "tool", "RUN"),  # fallback
-            # Kubernetes
-            (["kubectl apply"], "Kubernetes", "tool", "DEPLOY"),
-            (["kubectl"], "Kubernetes", "tool", "RUN"),
-            # Rust
-            (["cargo build"], "Rust", "language", "BUILD"),
-            (["cargo test"], "Rust", "language", "TEST"),
-            (["cargo run"], "Rust", "language", "RUN"),
-            # Make
-            (["make build"], "Make", "tool", "BUILD"),
-            (["make test"], "Make", "tool", "TEST"),
-            (["make"], "Make", "tool", "BUILD"),  # fallback
-        ]
+                    WITH c
+                    // Create and link category
+                    FOREACH (_ IN CASE WHEN $category IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (cat:Category {name: $category})
+                        MERGE (c)-[:HAS_CATEGORY]->(cat)
+                    )
 
-        for keywords, stack_name, stack_type, rel_type in patterns:
-            if self._matches_any_keyword(command_lower, keywords):
-                self._ensure_stack_link(command_id, stack_name, stack_type, rel_type)
-                break  # Only use first matching pattern for this stack
+                    WITH c
+                    // Create and link OS
+                    FOREACH (_ IN CASE WHEN $os IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (o:OS {name: $os})
+                        MERGE (c)-[:RUNS_ON]->(o)
+                    )
 
-    def _matches_any_keyword(self, command: str, keywords: list[str]) -> bool:
-        """Check if command contains any of the keywords."""
-        return any(keyword in command for keyword in keywords)
+                    WITH c
+                    // Create and link project type
+                    FOREACH (_ IN CASE WHEN $project_type IS NOT NULL THEN [1] ELSE [] END |
+                        MERGE (pt:ProjectType {name: $project_type})
+                        MERGE (c)-[:FOR_PROJECT]->(pt)
+                    )
+                    """,
+                    id=command_id,
+                    command=command_text,
+                    description=command.description,
+                    context=command.context,
+                    tags=all_tags,
+                    created_at=datetime.now().astimezone().isoformat(),
+                    execution_count=execution_count,
+                    success_count=success_count,
+                    failure_count=failure_count,
+                    category=category,
+                    os=command.os,
+                    project_type=command.project_type,
+                )
 
-    def _ensure_stack_link(
-        self, command_id: str, stack_name: str, stack_type: str, relationship_type: str
-    ) -> None:
-        """Create stack if needed and link command to it."""
-        with self.driver.session(database=self.database) as session:
-            session.run(
-                f"""
-                MATCH (c:Command {{id: $command_id}})
-                MERGE (s:Stack {{name: $stack_name}})
-                ON CREATE SET s.type = $stack_type, s.description = ''
-                MERGE (s)-[r:{relationship_type}]->(c)
-                """,
-                command_id=command_id,
-                stack_name=stack_name,
-                stack_type=stack_type,
-            )
+        return str(command_id)
 
     def search_commands(
         self,
@@ -295,74 +312,115 @@ class Neo4jClient:
             )
             params["query"] = query
 
-        # Structural filters
+        # Build relationship filters
+        relationship_filters = []
+
         if os:
-            where_clauses.append("c.os = $os")
+            relationship_filters.append("MATCH (c)-[:RUNS_ON]->(os:OS {name: $os})")
             params["os"] = os
 
         if project_type:
-            where_clauses.append("c.project_type = $project_type")
+            relationship_filters.append(
+                "MATCH (c)-[:FOR_PROJECT]->(pt:ProjectType {name: $project_type})"
+            )
             params["project_type"] = project_type
 
         if category:
-            where_clauses.append("c.category = $category")
+            relationship_filters.append(
+                "MATCH (c)-[:HAS_CATEGORY]->(cat:Category {name: $category})"
+            )
             params["category"] = category
 
-        # Tag matching
+        # Tag matching (OR logic - match if command has ANY of the provided tags)
         tag_match = ""
         if tags:
             tag_match = """
             MATCH (c)-[:TAGGED_WITH]->(t:Tag)
             WHERE t.name IN $tags
-            WITH c, count(t) as tag_count
-            WHERE tag_count = size($tags)
+            WITH DISTINCT c
             """
             params["tags"] = list(tags)
 
         # Build WHERE clause
         where_clause = ""
         if where_clauses:
-            if tag_match:
+            if tag_match or relationship_filters:
                 where_clause = "WITH c\nWHERE " + " AND ".join(where_clauses)
             else:
                 where_clause = "WHERE " + " AND ".join(where_clauses)
 
         # Build and execute query
-        cypher_query = f"""
+        final_query = f"""
         MATCH (c:Command)
+        {chr(10).join(relationship_filters)}
         {tag_match}
         {where_clause}
         OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
-        WITH c, collect(t.name) as tags
+        OPTIONAL MATCH (c)-[:RUNS_ON]->(os:OS)
+        OPTIONAL MATCH (c)-[:HAS_CATEGORY]->(cat:Category)
+        OPTIONAL MATCH (c)-[:FOR_PROJECT]->(pt:ProjectType)
+        WITH c,
+             collect(DISTINCT t.name) as tags,
+             collect(DISTINCT os.name) as oses,
+             collect(DISTINCT cat.name) as categories,
+             collect(DISTINCT pt.name) as project_types
         ORDER BY c.use_count DESC, c.created_at DESC
-        RETURN c, tags
+        RETURN c, tags, oses, categories, project_types
+        """
+
+        # Update query to also fetch OS, category, project_type from relationships
+        final_query = f"""
+        MATCH (c:Command)
+        {chr(10).join(relationship_filters)}
+        {tag_match}
+        {where_clause}
+        OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
+        OPTIONAL MATCH (c)-[:RUNS_ON]->(os:OS)
+        OPTIONAL MATCH (c)-[:HAS_CATEGORY]->(cat:Category)
+        OPTIONAL MATCH (c)-[:FOR_PROJECT]->(pt:ProjectType)
+        WITH c,
+             collect(DISTINCT t.name) as tags,
+             collect(DISTINCT os.name) as oses,
+             collect(DISTINCT cat.name) as categories,
+             collect(DISTINCT pt.name) as project_types
+        ORDER BY c.use_count DESC, c.created_at DESC
+        RETURN c, tags, oses, categories, project_types
         """
 
         with self.driver.session(database=self.database) as session:
-            result = session.run(cypher_query, params)
+            result = session.run(final_query, params)
             commands = []
 
             for record in result:
                 node = record["c"]
                 tags = record["tags"]
+                oses = record["oses"]
+                categories = record["categories"]
+                project_types = record["project_types"]
 
                 created_at = _convert_neo4j_datetime(node["created_at"])
                 if created_at is None:
                     continue  # Skip records with invalid timestamps
 
+                # Use first OS/category/project_type for backwards compatibility
+                # (CommandWithMetadata expects single values)
                 commands.append(
                     CommandWithMetadata(
                         id=node["id"],
                         command=node["command"],
                         description=node["description"],
                         tags=tags,
-                        os=node.get("os"),
-                        project_type=node.get("project_type"),
+                        os=oses[0] if oses else None,
+                        project_type=project_types[0] if project_types else None,
                         context=node.get("context"),
-                        category=node.get("category"),
+                        category=categories[0] if categories else None,
+                        status=node.get("status"),
                         created_at=created_at,
                         last_used=_convert_neo4j_datetime(node.get("last_used")),
                         use_count=node.get("use_count", 0),
+                        execution_count=node.get("execution_count", 0),
+                        success_count=node.get("success_count", 0),
+                        failure_count=node.get("failure_count", 0),
                     )
                 )
 
@@ -405,8 +463,15 @@ class Neo4jClient:
                     c.last_used = datetime($now)
                 WITH c
                 OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
-                WITH c, collect(t.name) as tags
-                RETURN c, tags
+                OPTIONAL MATCH (c)-[:RUNS_ON]->(os:OS)
+                OPTIONAL MATCH (c)-[:HAS_CATEGORY]->(cat:Category)
+                OPTIONAL MATCH (c)-[:FOR_PROJECT]->(pt:ProjectType)
+                WITH c,
+                     collect(DISTINCT t.name) as tags,
+                     collect(DISTINCT os.name) as oses,
+                     collect(DISTINCT cat.name) as categories,
+                     collect(DISTINCT pt.name) as project_types
+                RETURN c, tags, oses, categories, project_types
                 """,
                 id=command_id,
                 now=datetime.now().astimezone().isoformat(),
@@ -418,6 +483,9 @@ class Neo4jClient:
 
             node = record["c"]
             tags = record["tags"]
+            oses = record["oses"]
+            categories = record["categories"]
+            project_types = record["project_types"]
 
             # Validate timestamp before creating command object
             created_at = _convert_neo4j_datetime(node["created_at"])
@@ -430,13 +498,17 @@ class Neo4jClient:
                 command=node["command"],
                 description=node["description"],
                 tags=tags,
-                os=node.get("os"),
-                project_type=node.get("project_type"),
+                os=oses[0] if oses else None,
+                project_type=project_types[0] if project_types else None,
                 context=node.get("context"),
-                category=node.get("category"),
+                category=categories[0] if categories else None,
+                status=node.get("status"),
                 created_at=created_at,
                 last_used=_convert_neo4j_datetime(node.get("last_used")),
                 use_count=node.get("use_count", 0),
+                execution_count=node.get("execution_count", 0),
+                success_count=node.get("success_count", 0),
+                failure_count=node.get("failure_count", 0),
             )
 
     def delete_command(self, command_id: str) -> bool:
@@ -475,134 +547,10 @@ class Neo4jClient:
         with self.driver.session(database=self.database) as session:
             result = session.run(
                 """
-                MATCH (c:Command)
-                WHERE c.category IS NOT NULL
-                RETURN DISTINCT c.category as category
+                MATCH (cat:Category)
+                RETURN cat.name as category
                 ORDER BY category
                 """
             )
 
             return [record["category"] for record in result]
-
-    # Stack-related methods
-
-    def create_stack(self, stack: "Stack") -> None:
-        """Create or update a stack node."""
-
-        with self.driver.session(database=self.database) as session:
-            session.run(
-                """
-                MERGE (s:Stack {name: $name})
-                SET s.type = $type,
-                    s.description = $description
-                """,
-                name=stack.name,
-                type=stack.type,
-                description=stack.description,
-            )
-
-    def get_stack(self, name: str) -> "Stack | None":
-        """Get a stack by name."""
-
-        with self.driver.session(database=self.database) as session:
-            result = session.run(
-                """
-                MATCH (s:Stack {name: $name})
-                RETURN s
-                """,
-                name=name,
-            )
-            record = result.single()
-            if not record:
-                return None
-
-            node = record["s"]
-            return Stack(
-                name=node["name"], type=node["type"], description=node.get("description", "")
-            )
-
-    def link_command_to_stack(
-        self, command_id: str, stack_name: str, relationship_type: str
-    ) -> None:
-        """Link a command to a stack with a specific relationship type (e.g., BUILD, RUN, TEST)."""
-        with self.driver.session(database=self.database) as session:
-            # Create stack if it doesn't exist, then create relationship
-            session.run(
-                f"""
-                MATCH (c:Command {{id: $command_id}})
-                MERGE (s:Stack {{name: $stack_name}})
-                MERGE (s)-[r:{relationship_type}]->(c)
-                """,
-                command_id=command_id,
-                stack_name=stack_name,
-            )
-
-    def get_commands_by_stack(
-        self, stack_name: str, relationship_type: str | None = None
-    ) -> list["CommandWithMetadata"]:
-        """Get all commands for a specific stack, optionally filtered by relationship type."""
-
-        with self.driver.session(database=self.database) as session:
-            if relationship_type:
-                query = f"""
-                MATCH (s:Stack {{name: $stack_name}})-[r:{relationship_type}]->(c:Command)
-                OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
-                WITH c, collect(t.name) as tags
-                ORDER BY c.created_at DESC
-                RETURN c, tags
-                """
-            else:
-                query = """
-                MATCH (s:Stack {name: $stack_name})-[r]->(c:Command)
-                OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
-                WITH c, collect(t.name) as tags, type(r) as rel_type
-                ORDER BY c.created_at DESC
-                RETURN c, tags, rel_type
-                """
-
-            result = session.run(query, stack_name=stack_name)
-            commands = []
-            for record in result:
-                node = record["c"]
-                tags = record["tags"]
-
-                created_at = _convert_neo4j_datetime(node["created_at"])
-                if created_at is None:
-                    continue  # Skip records with invalid timestamps
-
-                commands.append(
-                    CommandWithMetadata(
-                        id=node["id"],
-                        command=node["command"],
-                        description=node.get("description", ""),
-                        tags=tags,
-                        os=node.get("os"),
-                        project_type=node.get("project_type"),
-                        context=node.get("context"),
-                        category=node.get("category"),
-                        created_at=created_at,
-                        last_used=_convert_neo4j_datetime(node.get("last_used")),
-                        use_count=node.get("use_count", 0),
-                    )
-                )
-            return commands
-
-    def list_stacks(self) -> list["Stack"]:
-        """List all stacks in the database."""
-
-        with self.driver.session(database=self.database) as session:
-            result = session.run(
-                """
-                MATCH (s:Stack)
-                RETURN s
-                ORDER BY s.name
-                """
-            )
-            return [
-                Stack(
-                    name=record["s"]["name"],
-                    type=record["s"]["type"],
-                    description=record["s"].get("description", ""),
-                )
-                for record in result
-            ]

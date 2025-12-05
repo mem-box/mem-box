@@ -5,14 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class Stack(BaseModel):
-    """A technology stack or tool (e.g., Docker, Python, Git)."""
-
-    name: str = Field(..., description="Name of the stack (e.g., Docker, Python)")
-    type: str = Field(..., description="Type of stack (tool, language, framework, etc.)")
-    description: str = Field(default="", description="Description of what this stack is")
-
-
 class Command(BaseModel):
     """A command stored in the memory box."""
 
@@ -23,6 +15,9 @@ class Command(BaseModel):
     project_type: str | None = Field(None, description="Project type (python, node, rust, etc.)")
     context: str | None = Field(None, description="Additional context about when to use this")
     category: str | None = Field(None, description="Category (git, docker, kubernetes, etc.)")
+    status: str | None = Field(
+        None, description="Command execution status (success, failed, unknown)"
+    )
 
 
 class CommandWithMetadata(Command):
@@ -32,3 +27,6 @@ class CommandWithMetadata(Command):
     created_at: datetime = Field(..., description="When this command was added")
     last_used: datetime | None = Field(None, description="Last time this command was accessed")
     use_count: int = Field(0, description="Number of times this command has been accessed")
+    execution_count: int = Field(0, description="Total number of times this command was executed")
+    success_count: int = Field(0, description="Number of successful executions")
+    failure_count: int = Field(0, description="Number of failed executions")

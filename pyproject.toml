@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mem-box"
-version = "0.1.0"
+version = "0.1.1"
 description = "A personal knowledge base for commands and workflows, accessible via MCP"
 readme = "README.md"
 license = {text = "MIT"}
@@ -28,6 +28,7 @@ dev = [
     "ruff>=0.1.8",
     "mypy>=1.8.0",
     "pre-commit>=3.6.0",
+    "testcontainers[neo4j]>=4.0.0",
 ]
 
 [project.scripts]

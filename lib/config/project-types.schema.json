@@ -1,0 +1,46 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Project Types Configuration",
+    "description": "Configuration for detecting project types based on file indicators",
+    "type": "object",
+    "properties": {
+        "project_types": {
+            "type": "object",
+            "description": "Project type definitions with file indicators",
+            "patternProperties": {
+                "^[a-z-]+$": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description of this project type"
+                        },
+                        "indicators": {
+                            "type": "array",
+                            "description": "File names that indicate this project type",
+                            "items": {
+                                "type": "string"
+                            },
+                            "minItems": 1
+                        },
+                        "tags": {
+                            "type": "array",
+                            "description": "Tags to automatically apply to commands in projects of this type",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "required": [
+                        "indicators"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        }
+    },
+    "required": [
+        "project_types"
+    ],
+    "additionalProperties": false
+}

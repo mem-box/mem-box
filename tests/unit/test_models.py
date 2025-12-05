@@ -21,6 +21,7 @@ class TestCommand:
         assert cmd.project_type is None
         assert cmd.context is None
         assert cmd.category is None
+        assert cmd.status is None
 
     def test_command_creation_complete(self) -> None:
         """Test creating a command with all fields."""
@@ -32,6 +33,7 @@ class TestCommand:
             project_type="python",
             context="Use when setting up a new Python project",
             category="package-management",
+            status="success",
         )
         assert cmd.command == "poetry install"
         assert cmd.description == "Install project dependencies"
@@ -40,6 +42,7 @@ class TestCommand:
         assert cmd.project_type == "python"
         assert cmd.context == "Use when setting up a new Python project"
         assert cmd.category == "package-management"
+        assert cmd.status == "success"
 
     def test_command_missing_required_fields(self) -> None:
         """Test that creating a command without required fields raises error."""

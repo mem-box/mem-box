@@ -7,6 +7,17 @@ import type { MemoryBoxClient as MemoryBoxClientType } from '../client';
 class MockChildProcess extends EventEmitter {
     stdin = {
         write: (data: string, callback?: (error?: Error) => void) => {
+            // Auto-respond to ping requests
+            try {
+                const request = JSON.parse(data);
+                if (request.method === 'ping') {
+                    setImmediate(() => {
+                        this.stdout.emit('data', Buffer.from('{"result":"pong","error":null}\n'));
+                    });
+                }
+            } catch {
+                // Not JSON, ignore
+            }
             if (callback) { callback(); }
             return true;
         }
@@ -33,12 +44,27 @@ describe('MemoryBoxClient', () => {
         // Use proxyquire to inject our mock
         const module = proxyquire.load('../client', {
             'child_process': {
-                spawn: () => {
-                    // Simulate successful connection with a ping response after a delay
-                    setTimeout(() => {
-                        mockProcess.stdout.emit('data', Buffer.from('{"result":"pong","error":null}\n'));
-                    }, 10);
-                    return mockProcess;
+                spawn: (command: string, args: string[]) => {
+                    // Create a new mock process for each spawn call
+                    const process = new MockChildProcess();
+
+                    // Handle different spawn types
+                    if (args && args.includes('-c') && args.includes('import server.bridge')) {
+                        // isInstalled() check - simulate success
+                        setImmediate(() => {
+                            process.emit('exit', 0, null);
+                        });
+                    } else if (args && args.includes('pip')) {
+                        // installPackage() - simulate success or skip
+                        setImmediate(() => {
+                            process.emit('exit', 0, null);
+                        });
+                    } else {
+                        // Actual bridge process - use the shared mockProcess
+                        return mockProcess;
+                    }
+
+                    return process;
                 }
             }
         });

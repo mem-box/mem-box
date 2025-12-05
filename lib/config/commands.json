@@ -1,0 +1,390 @@
+{
+    "$schema": "./commands.schema.json",
+    "commands": {
+        "npm": {
+            "category": "package-management",
+            "tags": [
+                "nodejs",
+                "javascript"
+            ]
+        },
+        "yarn": {
+            "category": "package-management",
+            "tags": [
+                "nodejs",
+                "javascript"
+            ]
+        },
+        "pnpm": {
+            "category": "package-management",
+            "tags": [
+                "nodejs",
+                "javascript"
+            ]
+        },
+        "pip": {
+            "category": "package-management",
+            "tags": [
+                "python"
+            ]
+        },
+        "pip3": {
+            "category": "package-management",
+            "tags": [
+                "python"
+            ]
+        },
+        "uv": {
+            "category": "package-management",
+            "tags": [
+                "python"
+            ]
+        },
+        "poetry": {
+            "category": "package-management",
+            "tags": [
+                "python"
+            ]
+        },
+        "cargo": {
+            "category": "package-management",
+            "tags": [
+                "rust"
+            ]
+        },
+        "gem": {
+            "category": "package-management",
+            "tags": [
+                "ruby"
+            ]
+        },
+        "bundle": {
+            "category": "package-management",
+            "tags": [
+                "ruby"
+            ]
+        },
+        "composer": {
+            "category": "package-management",
+            "tags": [
+                "php"
+            ]
+        },
+        "mvn": {
+            "category": "package-management",
+            "tags": [
+                "java",
+                "maven"
+            ]
+        },
+        "gradle": {
+            "category": "package-management",
+            "tags": [
+                "java",
+                "kotlin"
+            ]
+        },
+        "go": {
+            "category": "package-management",
+            "tags": [
+                "golang"
+            ]
+        },
+        "apt": {
+            "category": "package-management",
+            "tags": [
+                "linux",
+                "debian"
+            ]
+        },
+        "apt-get": {
+            "category": "package-management",
+            "tags": [
+                "linux",
+                "debian"
+            ]
+        },
+        "yum": {
+            "category": "package-management",
+            "tags": [
+                "linux",
+                "redhat"
+            ]
+        },
+        "dnf": {
+            "category": "package-management",
+            "tags": [
+                "linux",
+                "fedora"
+            ]
+        },
+        "brew": {
+            "category": "package-management",
+            "tags": [
+                "macos"
+            ]
+        },
+        "pacman": {
+            "category": "package-management",
+            "tags": [
+                "linux",
+                "arch"
+            ]
+        },
+        "git": {
+            "category": "git",
+            "tags": [
+                "vcs",
+                "version-control"
+            ]
+        },
+        "docker": {
+            "category": "container",
+            "tags": [
+                "container",
+                "devops"
+            ]
+        },
+        "podman": {
+            "category": "container",
+            "tags": [
+                "container",
+                "devops"
+            ]
+        },
+        "kubectl": {
+            "category": "container",
+            "tags": [
+                "kubernetes",
+                "k8s",
+                "devops"
+            ]
+        },
+        "helm": {
+            "category": "container",
+            "tags": [
+                "kubernetes",
+                "k8s",
+                "devops"
+            ]
+        },
+        "docker-compose": {
+            "category": "container",
+            "tags": [
+                "container",
+                "docker",
+                "devops"
+            ]
+        },
+        "ls": {
+            "category": "filesystem",
+            "tags": [
+                "file",
+                "list"
+            ]
+        },
+        "cd": {
+            "category": "filesystem",
+            "tags": [
+                "navigation"
+            ]
+        },
+        "pwd": {
+            "category": "filesystem",
+            "tags": [
+                "navigation"
+            ]
+        },
+        "mkdir": {
+            "category": "filesystem",
+            "tags": [
+                "directory",
+                "create"
+            ]
+        },
+        "rm": {
+            "category": "filesystem",
+            "tags": [
+                "delete",
+                "file"
+            ]
+        },
+        "cp": {
+            "category": "filesystem",
+            "tags": [
+                "copy",
+                "file"
+            ]
+        },
+        "mv": {
+            "category": "filesystem",
+            "tags": [
+                "move",
+                "file"
+            ]
+        },
+        "cat": {
+            "category": "filesystem",
+            "tags": [
+                "read",
+                "file"
+            ]
+        },
+        "grep": {
+            "category": "filesystem",
+            "tags": [
+                "search",
+                "text"
+            ]
+        },
+        "find": {
+            "category": "filesystem",
+            "tags": [
+                "search",
+                "file"
+            ]
+        },
+        "make": {
+            "category": "build",
+            "tags": [
+                "build",
+                "compile"
+            ]
+        },
+        "cmake": {
+            "category": "build",
+            "tags": [
+                "build",
+                "c",
+                "cpp"
+            ]
+        },
+        "ninja": {
+            "category": "build",
+            "tags": [
+                "build",
+                "compile"
+            ]
+        },
+        "pytest": {
+            "category": "testing",
+            "tags": [
+                "python",
+                "test"
+            ]
+        },
+        "jest": {
+            "category": "testing",
+            "tags": [
+                "javascript",
+                "test"
+            ]
+        },
+        "mocha": {
+            "category": "testing",
+            "tags": [
+                "javascript",
+                "test"
+            ]
+        },
+        "psql": {
+            "category": "database",
+            "tags": [
+                "postgresql",
+                "sql"
+            ]
+        },
+        "mysql": {
+            "category": "database",
+            "tags": [
+                "mysql",
+                "sql"
+            ]
+        },
+        "mongo": {
+            "category": "database",
+            "tags": [
+                "mongodb",
+                "nosql"
+            ]
+        },
+        "redis-cli": {
+            "category": "database",
+            "tags": [
+                "redis",
+                "cache"
+            ]
+        },
+        "systemctl": {
+            "category": "system",
+            "tags": [
+                "linux",
+                "service",
+                "systemd"
+            ]
+        },
+        "ps": {
+            "category": "system",
+            "tags": [
+                "process",
+                "monitoring"
+            ]
+        },
+        "top": {
+            "category": "system",
+            "tags": [
+                "process",
+                "monitoring"
+            ]
+        },
+        "curl": {
+            "category": "network",
+            "tags": [
+                "http",
+                "api"
+            ]
+        },
+        "wget": {
+            "category": "network",
+            "tags": [
+                "http",
+                "download"
+            ]
+        },
+        "ssh": {
+            "category": "network",
+            "tags": [
+                "remote",
+                "secure"
+            ]
+        },
+        "ping": {
+            "category": "network",
+            "tags": [
+                "network",
+                "diagnostic"
+            ]
+        },
+        "vim": {
+            "category": "editor",
+            "tags": [
+                "text",
+                "editor"
+            ]
+        },
+        "nano": {
+            "category": "editor",
+            "tags": [
+                "text",
+                "editor"
+            ]
+        },
+        "code": {
+            "category": "editor",
+            "tags": [
+                "vscode",
+                "ide"
+            ]
+        }
+    }
+}

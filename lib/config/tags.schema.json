@@ -1,0 +1,35 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Tags Configuration",
+    "description": "Definition of available tags and their metadata",
+    "type": "object",
+    "properties": {
+        "tags": {
+            "type": "object",
+            "description": "Tag definitions",
+            "patternProperties": {
+                "^[a-z0-9-]+$": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Type of tag (language, technology, operation, etc.)"
+                        }
+                    },
+                    "required": [
+                        "description"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        }
+    },
+    "required": [
+        "tags"
+    ],
+    "additionalProperties": false
+}

@@ -5,6 +5,3 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Set uv to use system python
 ENV UV_SYSTEM_PYTHON=1
-
-# Install VS Code Extension Manager globally
-RUN npm install -g @vscode/vsce

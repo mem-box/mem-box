@@ -1,0 +1,29 @@
+"""Config package."""
+
+from lib.config.loader import (
+    CATEGORIES_CONFIG,
+    CATEGORIES_MAP,
+    COMMAND_MAP,
+    COMMANDS_CONFIG,
+    INDICATOR_MAP,
+    PROJECT_TYPES_CONFIG,
+    PROJECT_TYPES_MAP,
+    SECRETS_CONFIG,
+    SECRETS_PATTERNS,
+    TAGS_CONFIG,
+    TAGS_MAP,
+)
+
+__all__ = [
+    "CATEGORIES_CONFIG",
+    "CATEGORIES_MAP",
+    "COMMANDS_CONFIG",
+    "COMMAND_MAP",
+    "INDICATOR_MAP",
+    "PROJECT_TYPES_CONFIG",
+    "PROJECT_TYPES_MAP",
+    "SECRETS_CONFIG",
+    "SECRETS_PATTERNS",
+    "TAGS_CONFIG",
+    "TAGS_MAP",
+]

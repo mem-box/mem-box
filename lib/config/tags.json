@@ -1,0 +1,109 @@
+{
+    "$schema": "./tags.schema.json",
+    "tags": {
+        "python": {
+            "description": "Python programming language",
+            "category": "language"
+        },
+        "javascript": {
+            "description": "JavaScript programming language",
+            "category": "language"
+        },
+        "nodejs": {
+            "description": "Node.js runtime",
+            "category": "runtime"
+        },
+        "rust": {
+            "description": "Rust programming language",
+            "category": "language"
+        },
+        "golang": {
+            "description": "Go programming language",
+            "category": "language"
+        },
+        "java": {
+            "description": "Java programming language",
+            "category": "language"
+        },
+        "ruby": {
+            "description": "Ruby programming language",
+            "category": "language"
+        },
+        "php": {
+            "description": "PHP programming language",
+            "category": "language"
+        },
+        "vcs": {
+            "description": "Version control system",
+            "category": "tool-type"
+        },
+        "version-control": {
+            "description": "Version control operations",
+            "category": "operation"
+        },
+        "container": {
+            "description": "Container technology",
+            "category": "technology"
+        },
+        "kubernetes": {
+            "description": "Kubernetes orchestration",
+            "category": "technology"
+        },
+        "k8s": {
+            "description": "Kubernetes (short form)",
+            "category": "technology"
+        },
+        "docker": {
+            "description": "Docker containerization",
+            "category": "technology"
+        },
+        "devops": {
+            "description": "DevOps tools and practices",
+            "category": "domain"
+        },
+        "build": {
+            "description": "Build operations",
+            "category": "operation"
+        },
+        "compile": {
+            "description": "Compilation operations",
+            "category": "operation"
+        },
+        "test": {
+            "description": "Testing operations",
+            "category": "operation"
+        },
+        "file": {
+            "description": "File operations",
+            "category": "operation"
+        },
+        "directory": {
+            "description": "Directory operations",
+            "category": "operation"
+        },
+        "network": {
+            "description": "Network operations",
+            "category": "domain"
+        },
+        "http": {
+            "description": "HTTP protocol",
+            "category": "protocol"
+        },
+        "sql": {
+            "description": "SQL database",
+            "category": "technology"
+        },
+        "nosql": {
+            "description": "NoSQL database",
+            "category": "technology"
+        },
+        "linux": {
+            "description": "Linux operating system",
+            "category": "os"
+        },
+        "macos": {
+            "description": "macOS operating system",
+            "category": "os"
+        }
+    }
+}

@@ -2,7 +2,7 @@
     "name": "mem-box-vscode",
     "displayName": "Mem Box",
     "description": "Automatically capture and search terminal commands",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "publisher": "mem-box",
     "repository": {
         "type": "git",
@@ -48,7 +48,7 @@
                 },
                 "memoryBox.captureExitCodeZeroOnly": {
                     "type": "boolean",
-                    "default": true,
+                    "default": false,
                     "description": "Only capture commands that succeed (exit code 0)"
                 },
                 "memoryBox.neo4jUri": {

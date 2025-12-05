@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from lib.config import Settings, get_settings
+from lib.settings import Settings, get_settings
 
 
 class TestSettings:

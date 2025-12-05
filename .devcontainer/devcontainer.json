@@ -6,6 +6,9 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
+    },
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
     }
   },
   "customizations": {
@@ -33,6 +36,6 @@
     7474,
     7687
   ],
-  "postCreateCommand": "uv sync --all-extras",
+  "postStartCommand": "npm install -g @vscode/vsce && uv sync --all-extras",
   "remoteUser": "vscode"
 }

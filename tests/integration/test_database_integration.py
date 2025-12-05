@@ -1,34 +1,34 @@
 """Integration tests for Neo4j database."""
 
-import os
 import time
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime
 
 import pytest
+from testcontainers.neo4j import Neo4jContainer
 
-from lib.config import Settings
+import lib.config
 from lib.database import Neo4jClient
 from lib.models import Command, CommandWithMetadata
-
-# Check if Neo4j is available for integration tests
-SKIP_INTEGRATION = os.getenv("SKIP_INTEGRATION_TESTS", "false").lower() == "true"
-skip_if_no_neo4j = pytest.mark.skipif(
-    SKIP_INTEGRATION,
-    reason="Integration tests disabled (set SKIP_INTEGRATION_TESTS=false to enable)",
-)
+from lib.settings import Settings
 
 
 @pytest.fixture(scope="module")
-def neo4j_settings() -> Settings:
+def neo4j_container() -> Generator[Neo4jContainer, None, None]:
+    """Start a Neo4j container for testing."""
+    with Neo4jContainer("neo4j:5-community") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def neo4j_settings(neo4j_container: Neo4jContainer) -> Settings:
     """Create settings for Neo4j test database."""
-    # Use environment variables if set, otherwise use defaults
     return Settings(
-        neo4j_uri=os.getenv("NEO4J_TEST_URI", "bolt://localhost:7687"),
-        neo4j_user=os.getenv("NEO4J_TEST_USER", "neo4j"),
-        neo4j_password=os.getenv("NEO4J_PASSWORD", "devpassword"),
-        neo4j_database=os.getenv("NEO4J_TEST_DATABASE", "neo4j"),
+        neo4j_uri=neo4j_container.get_connection_url(),
+        neo4j_user=neo4j_container.username,
+        neo4j_password=neo4j_container.password,
+        neo4j_database="neo4j",
     )
 
 
@@ -42,12 +42,13 @@ def db_client(neo4j_settings: Settings) -> Generator[Neo4jClient, None, None]:
     with client.driver.session(database=client.database) as session:
         session.run("MATCH (n:Command) DETACH DELETE n")
         session.run("MATCH (n:Tag) DELETE n")
-        session.run("MATCH (n:Stack) DELETE n")
+        session.run("MATCH (n:Category) DELETE n")
+        session.run("MATCH (n:OS) DELETE n")
+        session.run("MATCH (n:ProjectType) DELETE n")
 
     client.close()
 
 
-@skip_if_no_neo4j
 class TestNeo4jIntegration:
     """Integration tests for Neo4j database operations."""
 
@@ -73,7 +74,10 @@ class TestNeo4jIntegration:
         assert retrieved.id == command_id
         assert retrieved.command == "git status"
         assert retrieved.description == "Show the working tree status"
-        assert set(retrieved.tags) == {"git", "status"}
+        # Auto-detected tags from commands.json: git -> [git, vcs, version-control]
+        # Plus user tags: [git, status]
+        assert "git" in retrieved.tags
+        assert "status" in retrieved.tags
         assert retrieved.os == "linux"
         assert retrieved.project_type == "python"
         assert retrieved.category == "git"
@@ -188,6 +192,43 @@ class TestNeo4jIntegration:
         success = db_client.delete_command(str(uuid.uuid4()))
         assert success is False
 
+    def test_search_with_query_only(self, db_client: Neo4jClient) -> None:
+        """Test search with query parameter only (no tags, os, category, project_type)."""
+        # Add some test commands
+        cmd1 = Command(command="echo 'hello'", description="Print hello")
+        cmd2 = Command(command="echo 'world'", description="Print world")
+        cmd3 = Command(command="ls -la", description="List files")
+
+        db_client.add_command(cmd1)
+        db_client.add_command(cmd2)
+        db_client.add_command(cmd3)
+
+        # Search with ONLY query parameter (triggers line 353: WHERE without WITH c)
+        results = db_client.search_commands(query="echo")
+
+        assert len(results) == 2
+        commands = [r.command for r in results]
+        assert "echo 'hello'" in commands
+        assert "echo 'world'" in commands
+        assert "ls -la" not in commands
+
+    def test_search_with_query_and_tag(self, db_client: Neo4jClient) -> None:
+        """Test search with query AND tag filter (triggers line 353: WITH c WHERE)."""
+        # Add test commands
+        cmd1 = Command(command="echo 'hello'", description="Print hello", tags=["test"])
+        cmd2 = Command(command="echo 'world'", description="Print world", tags=["prod"])
+        cmd3 = Command(command="ls -la", description="List files", tags=["test"])
+
+        db_client.add_command(cmd1)
+        db_client.add_command(cmd2)
+        db_client.add_command(cmd3)
+
+        # Search with query AND tags (triggers line 353: WITH c\nWHERE because tag_match is set)
+        results = db_client.search_commands(query="echo", tags=["test"])
+
+        assert len(results) == 1
+        assert results[0].command == "echo 'hello'"
+
     def test_get_all_tags(self, db_client: Neo4jClient) -> None:
         """Test retrieving all unique tags."""
         commands = [
@@ -205,10 +246,11 @@ class TestNeo4jIntegration:
 
     def test_get_all_categories(self, db_client: Neo4jClient) -> None:
         """Test retrieving all unique categories."""
+        # Use unique command texts to avoid deduplication
         commands = [
-            Command(command="cmd1", description="Command 1", category="cat1"),
-            Command(command="cmd2", description="Command 2", category="cat2"),
-            Command(command="cmd3", description="Command 3", category="cat2"),
+            Command(command="unique_cmd1", description="Command 1", category="cat1"),
+            Command(command="unique_cmd2", description="Command 2", category="cat2"),
+            Command(command="unique_cmd3", description="Command 3", category="cat2"),
         ]
 
         for cmd in commands:
@@ -301,186 +343,64 @@ class TestNeo4jIntegration:
         assert retrieved.created_at is not None
         assert before <= retrieved.created_at <= after
 
-
-@skip_if_no_neo4j
-class TestStackAutoLinkingIntegration:
-    """Integration tests for automatic stack detection and linking."""
-
-    def test_docker_build_creates_docker_stack(self, db_client: Neo4jClient) -> None:
-        """Test that 'docker build' command creates Docker stack with BUILD relationship."""
+    def test_command_execution_tracking(self, db_client: Neo4jClient) -> None:
+        """Test execution count tracking."""
+        # Add a command and execute it multiple times
         cmd = Command(
-            command="docker build -t myapp:latest .",
-            description="Build Docker image for myapp",
-            tags=["docker", "build"],
+            command="echo 'Hello World'",
+            description="Print hello world",
+            tags=["test"],
         )
 
-        command_id = db_client.add_command(cmd)
+        cmd_id = db_client.add_command(cmd)
+        retrieved = db_client.get_command(cmd_id)
 
-        # Verify the stack was created
-        docker_stack = db_client.get_stack("Docker")
-        assert docker_stack is not None
-        assert docker_stack.name == "Docker"
-        assert docker_stack.type == "tool"
+        assert retrieved is not None
+        # Initial execution count should be 0 since we don't track status anymore
+        assert retrieved.execution_count == 0
+        assert retrieved.success_count == 0
+        assert retrieved.failure_count == 0
 
-        # Verify the command is linked to the stack
-        commands = db_client.get_commands_by_stack("Docker")
-        assert len(commands) >= 1
-        assert any(c.id == command_id for c in commands)
-
-        # Verify BUILD relationship exists
-        build_commands = db_client.get_commands_by_stack("Docker", relationship_type="BUILD")
-        assert len(build_commands) >= 1
-        assert any(c.id == command_id for c in build_commands)
-
-    def test_pytest_creates_python_test_stack(self, db_client: Neo4jClient) -> None:
-        """Test that 'pytest' command creates Python stack with TEST relationship."""
-        cmd = Command(
-            command="pytest tests/ -v --cov",
-            description="Run Python tests with coverage",
-            tags=["python", "testing"],
+        # Execute the same command again (simulated by adding again)
+        cmd2 = Command(
+            command="echo 'Hello World'",  # Same command text
+            description="Print hello world",
+            tags=["test"],
         )
 
-        command_id = db_client.add_command(cmd)
+        cmd_id2 = db_client.add_command(cmd2)
+        assert cmd_id == cmd_id2  # Should be same ID (deduplication)
 
-        # Verify Python stack exists
-        python_stack = db_client.get_stack("Python")
-        assert python_stack is not None
-        assert python_stack.name == "Python"
-        assert python_stack.type == "language"
+        retrieved2 = db_client.get_command(cmd_id)
+        assert retrieved2 is not None
+        assert retrieved2.execution_count == 1  # Incremented
+        assert retrieved2.success_count == 0  # Not tracked
+        assert retrieved2.failure_count == 0  # Not tracked
 
-        # Verify TEST relationship
-        test_commands = db_client.get_commands_by_stack("Python", relationship_type="TEST")
-        assert len(test_commands) >= 1
-        assert any(c.id == command_id for c in test_commands)
+    def test_invalid_category_validation(self, db_client: Neo4jClient) -> None:
+        """Test that invalid categories in commands.json are filtered out."""
+        # Save original
+        original_command_map = lib.config.COMMAND_MAP.copy()
+        original_categories_map = lib.config.CATEGORIES_MAP.copy()
 
-    def test_git_push_creates_git_deploy_stack(self, db_client: Neo4jClient) -> None:
-        """Test that 'git push' command creates Git stack with DEPLOY relationship."""
-        cmd = Command(
-            command="git push origin main",
-            description="Push changes to main branch",
-            tags=["git"],
-        )
+        try:
+            # Add a command with a category that doesn't exist in CATEGORIES_MAP
+            lib.config.COMMAND_MAP["invalidcmd"] = {
+                "category": "nonexistent_category",
+                "tags": ["test"],
+            }
 
-        command_id = db_client.add_command(cmd)
+            # Add command - should trigger line 35 (category validation)
+            cmd = Command(command="invalidcmd test", description="Test invalid category")
+            cmd_id = db_client.add_command(cmd)
 
-        # Verify Git stack
-        git_stack = db_client.get_stack("Git")
-        assert git_stack is not None
-        assert git_stack.name == "Git"
-        assert git_stack.type == "tool"
+            # Category should have been filtered to None
+            retrieved = db_client.get_command(cmd_id)
+            assert retrieved is not None
+            # Since category was invalid, it should be None
+            assert retrieved.category is None
 
-        # Verify DEPLOY relationship
-        deploy_commands = db_client.get_commands_by_stack("Git", relationship_type="DEPLOY")
-        assert len(deploy_commands) >= 1
-        assert any(c.id == command_id for c in deploy_commands)
-
-    def test_npm_creates_node_stack(self, db_client: Neo4jClient) -> None:
-        """Test that npm commands create Node stack with appropriate relationships."""
-        # Test npm run build -> BUILD relationship
-        build_cmd = Command(
-            command="npm run build",
-            description="Build Node.js application",
-            tags=["node", "npm"],
-        )
-        build_id = db_client.add_command(build_cmd)
-
-        # Test npm test -> TEST relationship
-        test_cmd = Command(
-            command="npm test",
-            description="Run Node.js tests",
-            tags=["node"],
-        )
-        test_id = db_client.add_command(test_cmd)
-
-        # Verify Node stack
-        node_stack = db_client.get_stack("Node")
-        assert node_stack is not None
-        assert node_stack.name == "Node"
-        assert node_stack.type == "language"
-
-        # Verify BUILD relationship
-        build_commands = db_client.get_commands_by_stack("Node", relationship_type="BUILD")
-        assert any(c.id == build_id for c in build_commands)
-
-        # Verify TEST relationship
-        test_commands = db_client.get_commands_by_stack("Node", relationship_type="TEST")
-        assert any(c.id == test_id for c in test_commands)
-
-    def test_multiple_stacks_for_single_command(self, db_client: Neo4jClient) -> None:
-        """Test that a command can be linked to multiple stacks."""
-        # A command that could relate to both Docker and Python
-        cmd = Command(
-            command="docker run python:3.11 python script.py",
-            description="Run Python script in Docker container",
-            tags=["docker", "python"],
-        )
-
-        command_id = db_client.add_command(cmd)
-
-        # Should be linked to both Docker and Python stacks
-        docker_commands = db_client.get_commands_by_stack("Docker")
-        python_commands = db_client.get_commands_by_stack("Python")
-
-        assert any(c.id == command_id for c in docker_commands)
-        assert any(c.id == command_id for c in python_commands)
-
-    def test_list_all_stacks(self, db_client: Neo4jClient) -> None:
-        """Test listing all stacks after adding various commands."""
-        # Add commands that create different stacks
-        commands = [
-            Command(command="docker build .", description="Build", tags=[]),
-            Command(command="pytest tests/", description="Test", tags=[]),
-            Command(command="git commit -m 'msg'", description="Commit", tags=[]),
-            Command(command="cargo build", description="Build Rust", tags=[]),
-        ]
-
-        for cmd in commands:
-            db_client.add_command(cmd)
-
-        # List all stacks
-        stacks = db_client.list_stacks()
-
-        # Should have at least Docker, Python, Git, Rust
-        stack_names = {s.name for s in stacks}
-        assert "Docker" in stack_names
-        assert "Python" in stack_names
-        assert "Git" in stack_names
-        assert "Rust" in stack_names
-
-    def test_tag_based_stack_linking(self, db_client: Neo4jClient) -> None:
-        """Test that tags alone can trigger stack linking."""
-        cmd = Command(
-            command="custom-script.sh",
-            description="Custom script",
-            tags=["kubernetes"],  # Tag should trigger Kubernetes stack
-        )
-
-        command_id = db_client.add_command(cmd)
-
-        # Verify Kubernetes stack was created
-        k8s_stack = db_client.get_stack("Kubernetes")
-        assert k8s_stack is not None
-        assert k8s_stack.name == "Kubernetes"
-
-        # Verify command is linked
-        k8s_commands = db_client.get_commands_by_stack("Kubernetes")
-        assert any(c.id == command_id for c in k8s_commands)
-
-    def test_stack_linking_with_category(self, db_client: Neo4jClient) -> None:
-        """Test that category can influence stack linking."""
-        cmd = Command(
-            command="make build",
-            description="Build using Make",
-            tags=[],
-            category="build",
-        )
-
-        command_id = db_client.add_command(cmd)
-
-        # Should create Make stack
-        make_stack = db_client.get_stack("Make")
-        assert make_stack is not None
-
-        # Verify BUILD relationship (from 'make build' pattern)
-        build_commands = db_client.get_commands_by_stack("Make", relationship_type="BUILD")
-        assert any(c.id == command_id for c in build_commands)
+        finally:
+            # Restore original maps
+            lib.config.COMMAND_MAP = original_command_map
+            lib.config.CATEGORIES_MAP = original_categories_map

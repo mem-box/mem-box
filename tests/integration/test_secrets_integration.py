@@ -1,30 +1,30 @@
 """Integration tests for secret obfuscation in database operations."""
 
-import os
 from collections.abc import Generator
 
 import pytest
+from testcontainers.neo4j import Neo4jContainer
 
-from lib.config import Settings
 from lib.database import Neo4jClient
 from lib.models import Command
-
-# Check if Neo4j is available for integration tests
-SKIP_INTEGRATION = os.getenv("SKIP_INTEGRATION_TESTS", "false").lower() == "true"
-skip_if_no_neo4j = pytest.mark.skipif(
-    SKIP_INTEGRATION,
-    reason="Integration tests disabled (set SKIP_INTEGRATION_TESTS=false to enable)",
-)
+from lib.settings import Settings
 
 
 @pytest.fixture(scope="module")
-def neo4j_settings() -> Settings:
+def neo4j_container() -> Generator[Neo4jContainer, None, None]:
+    """Start a Neo4j container for testing."""
+    with Neo4jContainer("neo4j:5-community") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def neo4j_settings(neo4j_container: Neo4jContainer) -> Settings:
     """Create settings for Neo4j test database."""
     return Settings(
-        neo4j_uri=os.getenv("NEO4J_TEST_URI", "bolt://localhost:7687"),
-        neo4j_user=os.getenv("NEO4J_TEST_USER", "neo4j"),
-        neo4j_password=os.getenv("NEO4J_PASSWORD", "devpassword"),
-        neo4j_database=os.getenv("NEO4J_TEST_DATABASE", "neo4j"),
+        neo4j_uri=neo4j_container.get_connection_url(),
+        neo4j_user=neo4j_container.username,
+        neo4j_password=neo4j_container.password,
+        neo4j_database="neo4j",
     )
 
 
@@ -42,7 +42,6 @@ def db_client(neo4j_settings: Settings) -> Generator[Neo4jClient, None, None]:
     client.close()
 
 
-@skip_if_no_neo4j
 class TestSecretsIntegration:
     """Test that secrets are stripped before storage."""
 

@@ -1,0 +1,49 @@
+{
+    "$schema": "./categories.schema.json",
+    "categories": {
+        "package-management": {
+            "description": "Package and dependency management tools",
+            "color": "blue"
+        },
+        "git": {
+            "description": "Git version control operations",
+            "color": "orange"
+        },
+        "container": {
+            "description": "Container and orchestration tools",
+            "color": "cyan"
+        },
+        "filesystem": {
+            "description": "File and directory operations",
+            "color": "green"
+        },
+        "build": {
+            "description": "Build tools and compilation",
+            "color": "yellow"
+        },
+        "testing": {
+            "description": "Testing frameworks and tools",
+            "color": "purple"
+        },
+        "database": {
+            "description": "Database clients and management",
+            "color": "magenta"
+        },
+        "system": {
+            "description": "System administration and monitoring",
+            "color": "red"
+        },
+        "network": {
+            "description": "Network tools and utilities",
+            "color": "teal"
+        },
+        "editor": {
+            "description": "Text editors and IDEs",
+            "color": "pink"
+        },
+        "shell": {
+            "description": "Shell built-ins and utilities",
+            "color": "gray"
+        }
+    }
+}
