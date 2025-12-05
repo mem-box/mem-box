@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from lib.api import MemoryBox
-from lib.models import Command
+from lib.models import Command, Stack
 from server.context import get_current_context
 
 app = typer.Typer(
@@ -278,6 +278,88 @@ def suggest() -> None:
             console.print(f"   [dim]Tags: {', '.join(cmd.tags)}[/dim]")
 
     console.print()
+    mb.close()
+
+
+@app.command("list-stacks")
+def list_stacks() -> None:
+    """List all technology stacks found in your commands.
+
+    Stacks are automatically detected from your commands (e.g., Docker, Python, Git).
+    They help organize commands by technology.
+    """
+    mb = get_memory_box()
+    stacks = mb.list_stacks()
+
+    if not stacks:
+        console.print(
+            "[yellow]No stacks found yet. "
+            "Add some commands to automatically create stacks![/yellow]"
+        )
+        mb.close()
+        return
+
+    console.print("[bold]Technology Stacks:[/bold]\n")
+
+    # Group by type
+    by_type: dict[str, list[Stack]] = {}
+    for stack in stacks:
+        if stack.type not in by_type:
+            by_type[stack.type] = []
+        by_type[stack.type].append(stack)
+
+    for stack_type in sorted(by_type.keys()):
+        console.print(f"[bold cyan]{stack_type.capitalize()}s:[/bold cyan]")
+        for stack in sorted(by_type[stack_type], key=lambda s: s.name):
+            desc = f" - {stack.description}" if stack.description else ""
+            console.print(f"  • [green]{stack.name}[/green]{desc}")
+        console.print()
+
+    mb.close()
+
+
+@app.command("stack")
+def get_stack_commands(
+    stack_name: str = typer.Argument(..., help="Name of the stack (e.g., Docker, Python, Git)"),
+    relationship_type: str | None = typer.Option(
+        None, "--type", "-t", help="Filter by relationship type (BUILD, RUN, TEST, DEPLOY)"
+    ),
+) -> None:
+    """Get all commands for a specific technology stack.
+
+    Commands are automatically organized by stack based on their content and tags.
+    You can filter by relationship type to see only BUILD, RUN, TEST, or DEPLOY commands.
+
+    Examples:
+        memory-box stack Docker              # All Docker commands
+        memory-box stack Python --type TEST  # Only Python test commands
+        memory-box stack Git -t DEPLOY       # Only Git deploy commands
+    """
+    mb = get_memory_box()
+    commands = mb.get_commands_by_stack(stack_name, relationship_type)
+
+    if not commands:
+        rel_info = (
+            f" with [cyan]{relationship_type}[/cyan] relationship" if relationship_type else ""
+        )
+        console.print(
+            f"[yellow]No commands found for [bold]{stack_name}[/bold]{rel_info}.[/yellow]"
+        )
+        mb.close()
+        return
+
+    rel_filter = f" [cyan]({relationship_type})[/cyan]" if relationship_type else ""
+    console.print(f"[bold]Commands for {stack_name}{rel_filter}:[/bold]\n")
+
+    for i, cmd in enumerate(commands, 1):
+        console.print(f"[bold cyan]{i}.[/bold cyan] [yellow]{cmd.description}[/yellow]")
+        console.print(f"   [green]{cmd.command}[/green]")
+        if cmd.tags:
+            tags_str = ", ".join(f"[blue]{tag}[/blue]" for tag in cmd.tags)
+            console.print(f"   Tags: {tags_str}")
+        console.print(f"   Used {cmd.use_count} times")
+        console.print()
+
     mb.close()
 
 

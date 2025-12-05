@@ -10,7 +10,7 @@ from neo4j.time import DateTime as Neo4jDateTime
 from rapidfuzz import fuzz
 
 from lib.config import Settings
-from lib.models import Command, CommandWithMetadata
+from lib.models import Command, CommandWithMetadata, Stack
 
 
 def _convert_neo4j_datetime(value: datetime | Neo4jDateTime | None) -> datetime | None:
@@ -127,7 +127,107 @@ class Neo4jClient:
                 created_at=datetime.now().astimezone().isoformat(),
             )
 
+        # Auto-detect and link to stacks based on command content
+        self._auto_link_stacks(command_id, command_text, command.tags, command.category)
+
         return command_id
+
+    def _auto_link_stacks(
+        self, command_id: str, command: str, tags: list[str], category: str | None
+    ) -> None:
+        """Automatically detect and link command to relevant stacks."""
+        command_lower = command.lower()
+        all_tags = [t.lower() for t in tags] + ([category.lower()] if category else [])
+
+        # Check tags/category first for explicit stack hints
+        self._link_from_tags(command_id, all_tags)
+
+        # Check command text for specific patterns
+        self._link_from_command_patterns(command_id, command_lower)
+
+    def _link_from_tags(self, command_id: str, tags: list[str]) -> None:
+        """Link command to stacks based on tags."""
+        tag_stack_map = {
+            "docker": ("Docker", "tool"),
+            "container": ("Docker", "tool"),
+            "python": ("Python", "language"),
+            "py": ("Python", "language"),
+            "node": ("Node", "language"),
+            "npm": ("Node", "language"),
+            "javascript": ("Node", "language"),
+            "js": ("Node", "language"),
+            "kubernetes": ("Kubernetes", "tool"),
+            "k8s": ("Kubernetes", "tool"),
+            "rust": ("Rust", "language"),
+            "cargo": ("Rust", "language"),
+            "git": ("Git", "tool"),
+        }
+
+        for tag in tags:
+            if tag in tag_stack_map:
+                stack_name, stack_type = tag_stack_map[tag]
+                self._ensure_stack_link(command_id, stack_name, stack_type, "RUN")
+
+    def _link_from_command_patterns(self, command_id: str, command_lower: str) -> None:
+        """Link command to stacks based on command patterns."""
+        # Stack detection patterns: (keywords, stack_name, stack_type, relationship_type)
+        patterns = [
+            # Docker
+            (["docker build"], "Docker", "tool", "BUILD"),
+            (["docker run", "docker start", "docker compose up"], "Docker", "tool", "RUN"),
+            (["docker"], "Docker", "tool", "RUN"),  # fallback
+            # Python
+            (["pytest", "python -m pytest", "py.test"], "Python", "language", "TEST"),
+            (["python -m", "python3 -m"], "Python", "language", "RUN"),
+            (["pip install", "pip3 install"], "Python", "language", "BUILD"),
+            (["python", "python3"], "Python", "language", "RUN"),  # fallback
+            # Node/npm
+            (["npm run build", "yarn build"], "Node", "language", "BUILD"),
+            (["npm test", "yarn test"], "Node", "language", "TEST"),
+            (["npm run", "yarn run"], "Node", "language", "RUN"),
+            (["npm install", "yarn install"], "Node", "language", "BUILD"),
+            # Git
+            (["git push", "git pull"], "Git", "tool", "DEPLOY"),
+            (["git commit"], "Git", "tool", "BUILD"),
+            (["git"], "Git", "tool", "RUN"),  # fallback
+            # Kubernetes
+            (["kubectl apply"], "Kubernetes", "tool", "DEPLOY"),
+            (["kubectl"], "Kubernetes", "tool", "RUN"),
+            # Rust
+            (["cargo build"], "Rust", "language", "BUILD"),
+            (["cargo test"], "Rust", "language", "TEST"),
+            (["cargo run"], "Rust", "language", "RUN"),
+            # Make
+            (["make build"], "Make", "tool", "BUILD"),
+            (["make test"], "Make", "tool", "TEST"),
+            (["make"], "Make", "tool", "BUILD"),  # fallback
+        ]
+
+        for keywords, stack_name, stack_type, rel_type in patterns:
+            if self._matches_any_keyword(command_lower, keywords):
+                self._ensure_stack_link(command_id, stack_name, stack_type, rel_type)
+                break  # Only use first matching pattern for this stack
+
+    def _matches_any_keyword(self, command: str, keywords: list[str]) -> bool:
+        """Check if command contains any of the keywords."""
+        return any(keyword in command for keyword in keywords)
+
+    def _ensure_stack_link(
+        self, command_id: str, stack_name: str, stack_type: str, relationship_type: str
+    ) -> None:
+        """Create stack if needed and link command to it."""
+        with self.driver.session(database=self.database) as session:
+            session.run(
+                f"""
+                MATCH (c:Command {{id: $command_id}})
+                MERGE (s:Stack {{name: $stack_name}})
+                ON CREATE SET s.type = $stack_type, s.description = ''
+                MERGE (s)-[r:{relationship_type}]->(c)
+                """,
+                command_id=command_id,
+                stack_name=stack_name,
+                stack_type=stack_type,
+            )
 
     def search_commands(
         self,
@@ -383,3 +483,126 @@ class Neo4jClient:
             )
 
             return [record["category"] for record in result]
+
+    # Stack-related methods
+
+    def create_stack(self, stack: "Stack") -> None:
+        """Create or update a stack node."""
+
+        with self.driver.session(database=self.database) as session:
+            session.run(
+                """
+                MERGE (s:Stack {name: $name})
+                SET s.type = $type,
+                    s.description = $description
+                """,
+                name=stack.name,
+                type=stack.type,
+                description=stack.description,
+            )
+
+    def get_stack(self, name: str) -> "Stack | None":
+        """Get a stack by name."""
+
+        with self.driver.session(database=self.database) as session:
+            result = session.run(
+                """
+                MATCH (s:Stack {name: $name})
+                RETURN s
+                """,
+                name=name,
+            )
+            record = result.single()
+            if not record:
+                return None
+
+            node = record["s"]
+            return Stack(
+                name=node["name"], type=node["type"], description=node.get("description", "")
+            )
+
+    def link_command_to_stack(
+        self, command_id: str, stack_name: str, relationship_type: str
+    ) -> None:
+        """Link a command to a stack with a specific relationship type (e.g., BUILD, RUN, TEST)."""
+        with self.driver.session(database=self.database) as session:
+            # Create stack if it doesn't exist, then create relationship
+            session.run(
+                f"""
+                MATCH (c:Command {{id: $command_id}})
+                MERGE (s:Stack {{name: $stack_name}})
+                MERGE (s)-[r:{relationship_type}]->(c)
+                """,
+                command_id=command_id,
+                stack_name=stack_name,
+            )
+
+    def get_commands_by_stack(
+        self, stack_name: str, relationship_type: str | None = None
+    ) -> list["CommandWithMetadata"]:
+        """Get all commands for a specific stack, optionally filtered by relationship type."""
+
+        with self.driver.session(database=self.database) as session:
+            if relationship_type:
+                query = f"""
+                MATCH (s:Stack {{name: $stack_name}})-[r:{relationship_type}]->(c:Command)
+                OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
+                WITH c, collect(t.name) as tags
+                ORDER BY c.created_at DESC
+                RETURN c, tags
+                """
+            else:
+                query = """
+                MATCH (s:Stack {name: $stack_name})-[r]->(c:Command)
+                OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
+                WITH c, collect(t.name) as tags, type(r) as rel_type
+                ORDER BY c.created_at DESC
+                RETURN c, tags, rel_type
+                """
+
+            result = session.run(query, stack_name=stack_name)
+            commands = []
+            for record in result:
+                node = record["c"]
+                tags = record["tags"]
+
+                created_at = _convert_neo4j_datetime(node["created_at"])
+                if created_at is None:
+                    continue  # Skip records with invalid timestamps
+
+                commands.append(
+                    CommandWithMetadata(
+                        id=node["id"],
+                        command=node["command"],
+                        description=node.get("description", ""),
+                        tags=tags,
+                        os=node.get("os"),
+                        project_type=node.get("project_type"),
+                        context=node.get("context"),
+                        category=node.get("category"),
+                        created_at=created_at,
+                        last_used=_convert_neo4j_datetime(node.get("last_used")),
+                        use_count=node.get("use_count", 0),
+                    )
+                )
+            return commands
+
+    def list_stacks(self) -> list["Stack"]:
+        """List all stacks in the database."""
+
+        with self.driver.session(database=self.database) as session:
+            result = session.run(
+                """
+                MATCH (s:Stack)
+                RETURN s
+                ORDER BY s.name
+                """
+            )
+            return [
+                Stack(
+                    name=record["s"]["name"],
+                    type=record["s"]["type"],
+                    description=record["s"].get("description", ""),
+                )
+                for record in result
+            ]

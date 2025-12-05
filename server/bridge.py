@@ -100,7 +100,9 @@ def main() -> None:
                 write_response(error_response)
 
     except KeyboardInterrupt:
-        pass
+        # Graceful shutdown on Ctrl+C
+        sys.stderr.write("Received interrupt signal, shutting down gracefully...\n")
+        sys.stderr.flush()
     finally:
         mb.close()
 

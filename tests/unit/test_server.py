@@ -5,10 +5,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from lib.models import CommandWithMetadata
+from lib.models import CommandWithMetadata, Stack
 
 # Import the functions - they're wrapped by FastMCP decorator, so we access the underlying function
 from server import server
+from server.server import main
 
 
 @pytest.fixture
@@ -316,3 +317,88 @@ class TestGetContextSuggestions:
 
         assert "No commands found" in result
         assert "linux" in result
+
+
+class TestStackMethods:
+    """Tests for stack-related MCP server functions."""
+
+    @patch("server.server.get_memory_box")
+    def test_list_stacks_with_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test listing stacks with results."""
+
+        mock_get_db.return_value = mock_db
+        mock_stacks = [
+            Stack(name="Docker", type="tool", description="Container platform"),
+            Stack(name="Python", type="language", description="Programming language"),
+            Stack(name="Git", type="tool", description="Version control"),
+        ]
+        mock_db.list_stacks.return_value = mock_stacks
+
+        result = server.list_stacks.fn()
+
+        assert "Technology Stacks" in result
+        assert "Docker" in result
+        assert "Python" in result
+        assert "Git" in result
+        assert "tool" in result.lower()
+        assert "language" in result.lower()
+
+    @patch("server.server.get_memory_box")
+    def test_list_stacks_empty(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test listing stacks with no results."""
+        mock_get_db.return_value = mock_db
+        mock_db.list_stacks.return_value = []
+
+        result = server.list_stacks.fn()
+
+        assert "No stacks found" in result
+
+    @patch("server.server.get_memory_box")
+    def test_get_commands_by_stack_with_results(
+        self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
+    ) -> None:
+        """Test getting commands for a stack with results."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = [sample_command]
+
+        result = server.get_commands_by_stack.fn(stack_name="Docker")
+
+        assert "Commands for Docker" in result
+        assert "git status" in result
+        assert "Show working tree status" in result
+        mock_db.get_commands_by_stack.assert_called_once_with("Docker", None)
+
+    @patch("server.server.get_memory_box")
+    def test_get_commands_by_stack_with_relationship_type(
+        self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
+    ) -> None:
+        """Test getting commands for a stack filtered by relationship type."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = [sample_command]
+
+        result = server.get_commands_by_stack.fn(stack_name="Docker", relationship_type="BUILD")
+
+        assert "Commands for Docker (BUILD)" in result
+        assert "git status" in result
+        mock_db.get_commands_by_stack.assert_called_once_with("Docker", "BUILD")
+
+    @patch("server.server.get_memory_box")
+    def test_get_commands_by_stack_no_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test getting commands for a stack with no results."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = []
+
+        result = server.get_commands_by_stack.fn(stack_name="Docker")
+
+        assert "No commands found for Docker" in result
+
+
+class TestServerMain:
+    """Tests for server main function."""
+
+    @patch("server.server.mcp.run")
+    def test_main_function(self, mock_run: Mock) -> None:
+        """Test that main() calls mcp.run()."""
+        main()
+
+        mock_run.assert_called_once()

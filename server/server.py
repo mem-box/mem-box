@@ -3,7 +3,7 @@
 from fastmcp import FastMCP
 
 from lib.api import MemoryBox
-from lib.models import Command
+from lib.models import Command, Stack
 from server.context import get_current_context
 
 # Initialize FastMCP server
@@ -281,6 +281,82 @@ def get_context_suggestions() -> str:
         result.append(f"   {cmd.command}")
         if cmd.tags:
             result.append(f"   Tags: {', '.join(cmd.tags)}")
+        result.append("")
+
+    return "\n".join(result)
+
+
+@mcp.tool()
+def list_stacks() -> str:
+    """
+    List all technology stacks found in your commands.
+
+    Stacks are automatically detected from your commands (e.g., Docker, Python, Git).
+    They help organize commands by technology.
+
+    Returns:
+        Formatted list of all stacks with their types
+    """
+    mb = get_memory_box()
+    stacks = mb.list_stacks()
+
+    if not stacks:
+        return "No stacks found yet. Add some commands to automatically create stacks!"
+
+    result = ["Technology Stacks:", ""]
+
+    # Group by type
+    by_type: dict[str, list[Stack]] = {}
+    for stack in stacks:
+        if stack.type not in by_type:
+            by_type[stack.type] = []
+        by_type[stack.type].append(stack)
+
+    for stack_type in sorted(by_type.keys()):
+        result.append(f"{stack_type.capitalize()}s:")
+        for stack in sorted(by_type[stack_type], key=lambda s: s.name):
+            desc = f" - {stack.description}" if stack.description else ""
+            result.append(f"  • {stack.name}{desc}")
+        result.append("")
+
+    return "\n".join(result)
+
+
+@mcp.tool()
+def get_commands_by_stack(stack_name: str, relationship_type: str | None = None) -> str:
+    """
+    Get all commands for a specific technology stack.
+
+    Commands are automatically organized by stack (Docker, Python, Git, etc.)
+    based on their content and tags. You can filter by relationship type:
+    - BUILD: Commands that build/compile (e.g., docker build, npm run build)
+    - RUN: Commands that run/execute (e.g., docker run, python script.py)
+    - TEST: Commands that test (e.g., pytest, npm test)
+    - DEPLOY: Commands that deploy (e.g., git push, kubectl apply)
+
+    Args:
+        stack_name: Name of the stack (e.g., "Docker", "Python", "Git")
+        relationship_type: Optional filter by type (BUILD, RUN, TEST, DEPLOY)
+
+    Returns:
+        Formatted list of commands for the stack
+    """
+    mb = get_memory_box()
+    commands = mb.get_commands_by_stack(stack_name, relationship_type)
+
+    if not commands:
+        rel_info = f" with {relationship_type} relationship" if relationship_type else ""
+        return f"No commands found for {stack_name}{rel_info}."
+
+    rel_filter = f" ({relationship_type})" if relationship_type else ""
+    result = [f"Commands for {stack_name}{rel_filter}:", ""]
+
+    for i, cmd in enumerate(commands, 1):
+        result.append(f"{i}. {cmd.description}")
+        result.append(f"   {cmd.command}")
+        if cmd.tags:
+            result.append(f"   Tags: {', '.join(cmd.tags)}")
+        result.append(f"   Used {cmd.use_count} times")
         result.append("")
 
     return "\n".join(result)

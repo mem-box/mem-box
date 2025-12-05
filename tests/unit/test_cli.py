@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from typer.testing import CliRunner
 
-from lib.models import CommandWithMetadata
+from lib.models import CommandWithMetadata, Stack
 from server.cli import app
 
 runner = CliRunner()
@@ -299,3 +299,113 @@ class TestSuggestCommand:
 
         assert result.exit_code == 0
         assert "No commands found" in result.stdout
+
+
+class TestStackCommands:
+    """Tests for stack-related commands."""
+
+    @patch("server.cli.get_memory_box")
+    def test_list_stacks_with_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test listing stacks with results."""
+
+        mock_get_db.return_value = mock_db
+        mock_stacks = [
+            Stack(name="Docker", type="tool", description="Container platform"),
+            Stack(name="Python", type="language", description="Programming language"),
+            Stack(name="Git", type="tool", description="Version control"),
+        ]
+        mock_db.list_stacks.return_value = mock_stacks
+
+        result = runner.invoke(app, ["list-stacks"])
+
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "Python" in result.stdout
+        assert "Git" in result.stdout
+        mock_db.close.assert_called_once()
+
+    @patch("server.cli.get_memory_box")
+    def test_list_stacks_empty(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test listing stacks with no results."""
+        mock_get_db.return_value = mock_db
+        mock_db.list_stacks.return_value = []
+
+        result = runner.invoke(app, ["list-stacks"])
+
+        assert result.exit_code == 0
+        assert "No stacks found" in result.stdout
+        mock_db.close.assert_called_once()
+
+    @patch("server.cli.get_memory_box")
+    def test_get_stack_commands_with_results(
+        self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
+    ) -> None:
+        """Test getting commands for a stack with results."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = [sample_command]
+
+        result = runner.invoke(app, ["stack", "Docker"])
+
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "git status" in result.stdout
+        mock_db.get_commands_by_stack.assert_called_once_with("Docker", None)
+        mock_db.close.assert_called_once()
+
+    @patch("server.cli.get_memory_box")
+    def test_get_stack_commands_with_relationship_type(
+        self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
+    ) -> None:
+        """Test getting commands for a stack filtered by relationship type."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = [sample_command]
+
+        result = runner.invoke(app, ["stack", "Docker", "--type", "BUILD"])
+
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "BUILD" in result.stdout
+        mock_db.get_commands_by_stack.assert_called_once_with("Docker", "BUILD")
+        mock_db.close.assert_called_once()
+
+    @patch("server.cli.get_memory_box")
+    def test_get_stack_commands_no_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
+        """Test getting commands for a stack with no results."""
+        mock_get_db.return_value = mock_db
+        mock_db.get_commands_by_stack.return_value = []
+
+        result = runner.invoke(app, ["stack", "Docker"])
+
+        assert result.exit_code == 0
+        assert "No commands found for Docker" in result.stdout
+        mock_db.close.assert_called_once()
+
+
+class TestEdgeCases:
+    """Test edge cases."""
+
+    @patch("server.cli.get_memory_box")
+    def test_delete_command_not_found(self, mock_get_db: Mock) -> None:
+        """Test deleting a command that doesn't exist."""
+        mock_db = Mock()
+        mock_get_db.return_value = mock_db
+        mock_db.delete_command.return_value = False  # Command not found
+
+        result = runner.invoke(app, ["delete", "nonexistent-id"], input="y\n")
+
+        assert result.exit_code == 0
+        assert "not found" in result.stdout.lower()
+        mock_db.close.assert_called_once()
+
+    @patch("server.cli.get_memory_box")
+    def test_categories_command_empty_list(self, mock_get_db: Mock) -> None:
+        """Test categories command when no categories exist."""
+        mock_db = Mock()
+        mock_get_db.return_value = mock_db
+        mock_db.get_all_categories.return_value = []
+
+        result = runner.invoke(app, ["categories"])
+
+        assert result.exit_code == 0
+        assert "No categories found" in result.stdout
+        mock_db.close.assert_called_once()

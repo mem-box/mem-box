@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from lib.config import Settings
 from lib.database import Neo4jClient
-from lib.models import Command, CommandWithMetadata
+from lib.models import Command, CommandWithMetadata, Stack
 
 
 class MemoryBox:
@@ -270,3 +270,55 @@ class MemoryBox:
             ['version-control', 'containers', 'networking']
         """
         return self._client.get_all_categories()
+
+    def list_stacks(self) -> list[Stack]:
+        """List all technology stacks in the memory box.
+
+        Stacks are automatically created when commands are added.
+        They represent technologies like Docker, Python, Git, etc.
+
+        Returns:
+            List of all Stack objects
+
+        Example:
+            >>> stacks = mb.list_stacks()
+            >>> for stack in stacks:
+            ...     print(f"{stack.name} ({stack.type})")
+            Docker (tool)
+            Python (language)
+            Git (tool)
+        """
+
+        return self._client.list_stacks()
+
+    def get_commands_by_stack(
+        self, stack_name: str, relationship_type: str | None = None
+    ) -> list[CommandWithMetadata]:
+        """Get all commands associated with a specific technology stack.
+
+        Commands are automatically linked to stacks when added based on
+        their content and tags. You can optionally filter by relationship
+        type (BUILD, RUN, TEST, DEPLOY).
+
+        Args:
+            stack_name: Name of the stack (e.g., "Docker", "Python", "Git")
+            relationship_type: Optional filter by relationship type
+                              (BUILD, RUN, TEST, DEPLOY)
+
+        Returns:
+            List of commands linked to the stack
+
+        Example:
+            >>> # Get all Docker commands
+            >>> docker_cmds = mb.get_commands_by_stack("Docker")
+            >>> print(len(docker_cmds))
+            15
+
+            >>> # Get only Docker BUILD commands
+            >>> build_cmds = mb.get_commands_by_stack("Docker", relationship_type="BUILD")
+            >>> for cmd in build_cmds:
+            ...     print(cmd.command)
+            docker build -t myapp .
+            docker build --no-cache .
+        """
+        return self._client.get_commands_by_stack(stack_name, relationship_type)

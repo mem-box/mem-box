@@ -323,3 +323,39 @@ class TestMain:
         assert len(lines) == 1
         data = json.loads(lines[0])
         assert data["result"] == "pong"
+
+    @patch("sys.argv", ["bridge.py"])
+    @patch("sys.stdin")
+    @patch("sys.stdout", new_callable=StringIO)
+    @patch("server.bridge.sys.stderr")
+    @patch("server.bridge.MemoryBox")
+    def test_main_keyboard_interrupt(self, mock_mb_class, mock_stderr, mock_stdout, mock_stdin):
+        """Test main function handles KeyboardInterrupt gracefully."""
+        mock_mb = MagicMock()
+        mock_mb_class.return_value = mock_mb
+
+        # Create a custom stdin that yields one line then raises KeyboardInterrupt
+        def stdin_generator(self):
+            yield '{"method": "ping", "params": {}}\n'
+            raise KeyboardInterrupt
+
+        mock_stdin.__iter__ = stdin_generator
+
+        # Should not raise exception, just exit cleanly
+        main()
+
+        # Memory box should be closed
+        mock_mb.close.assert_called_once()
+
+        # Should have processed the ping request before interrupt
+        output = mock_stdout.getvalue()
+        lines = [line for line in output.split("\n") if line.strip()]
+        assert len(lines) == 1
+        data = json.loads(lines[0])
+        assert data["result"] == "pong"
+
+        # Should have written graceful shutdown message to stderr
+        mock_stderr.write.assert_called()
+        stderr_calls = "".join(str(call) for call in mock_stderr.write.call_args_list)
+        assert "interrupt signal" in stderr_calls.lower()
+        assert "shutting down gracefully" in stderr_calls.lower()

@@ -5,6 +5,14 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class Stack(BaseModel):
+    """A technology stack or tool (e.g., Docker, Python, Git)."""
+
+    name: str = Field(..., description="Name of the stack (e.g., Docker, Python)")
+    type: str = Field(..., description="Type of stack (tool, language, framework, etc.)")
+    description: str = Field(default="", description="Description of what this stack is")
+
+
 class Command(BaseModel):
     """A command stored in the memory box."""
 

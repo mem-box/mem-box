@@ -8,8 +8,10 @@ from server.server import (
     add_command,
     delete_command,
     get_command_by_id,
+    get_commands_by_stack,
     get_context_suggestions,
     list_categories,
+    list_stacks,
     list_tags,
     search_commands,
 )
@@ -350,3 +352,153 @@ class TestMCPServerIntegration:
         """Test listing categories when none exist via MCP."""
         result = list_categories.fn()
         assert "No categories found" in result or "Available categories" in result
+
+    def test_list_stacks_via_mcp(self, neo4j_client):
+        """Test listing stacks via MCP server."""
+        # Add commands that create stacks
+        add_command.fn(
+            command="docker build -t app .",
+            description="Build Docker image",
+            tags=["docker"],
+            auto_detect_context=False,
+        )
+        add_command.fn(
+            command="pytest tests/",
+            description="Run Python tests",
+            tags=["python"],
+            auto_detect_context=False,
+        )
+        add_command.fn(
+            command="git push origin main",
+            description="Push to remote",
+            tags=["git"],
+            auto_detect_context=False,
+        )
+
+        # List stacks
+        result = list_stacks.fn()
+        assert "Technology Stacks" in result
+        assert "Docker" in result
+        assert "Python" in result
+        assert "Git" in result
+
+    def test_get_commands_by_stack_via_mcp(self, neo4j_client):
+        """Test getting commands for a specific stack via MCP."""
+        # Add Docker commands
+        add_command.fn(
+            command="docker build -t myapp .",
+            description="Build Docker image",
+            tags=["docker"],
+            auto_detect_context=False,
+        )
+        add_command.fn(
+            command="docker run -p 8080:80 myapp",
+            description="Run Docker container",
+            tags=["docker"],
+            auto_detect_context=False,
+        )
+        add_command.fn(
+            command="pytest tests/",
+            description="Run tests",
+            tags=["python"],
+            auto_detect_context=False,
+        )
+
+        # Get all Docker commands
+        result = get_commands_by_stack.fn(stack_name="Docker")
+        assert "Commands for Docker" in result
+        assert "docker build" in result
+        assert "docker run" in result
+        assert "pytest" not in result
+
+    def test_get_commands_by_stack_with_relationship_type_via_mcp(self, neo4j_client):
+        """Test filtering commands by stack and relationship type via MCP."""
+        # Add Docker commands
+        add_command.fn(
+            command="docker build -t myapp .",
+            description="Build Docker image",
+            tags=["docker"],
+            auto_detect_context=False,
+        )
+        add_command.fn(
+            command="docker run -p 8080:80 myapp",
+            description="Run Docker container",
+            tags=["docker"],
+            auto_detect_context=False,
+        )
+
+        # Get only Docker BUILD commands
+        result = get_commands_by_stack.fn(stack_name="Docker", relationship_type="BUILD")
+        assert "Commands for Docker (BUILD)" in result
+        assert "docker build" in result
+        assert "docker run" not in result
+
+    def test_empty_stack_list_via_mcp(self, neo4j_client):
+        """Test listing stacks when none exist via MCP."""
+        result = list_stacks.fn()
+        assert "No stacks found" in result
+
+    def test_add_command_auto_creates_stack(self, neo4j_client):
+        """Test that adding a command automatically creates the stack."""
+        # Verify no stacks exist initially
+        result = list_stacks.fn()
+        assert "No stacks found" in result
+
+        # Add a Docker command
+        add_command.fn(
+            command="docker build -t myapp .",
+            description="Build Docker image",
+            auto_detect_context=False,
+        )
+
+        # Verify Docker stack was created
+        result = list_stacks.fn()
+        assert "Docker" in result
+        assert "tool" in result.lower()
+
+        # Verify command is linked to stack
+        result = get_commands_by_stack.fn(stack_name="Docker")
+        assert "docker build" in result
+
+    def test_add_command_creates_multiple_stacks(self, neo4j_client):
+        """Test that adding commands creates multiple stacks."""
+        # Add commands for different technologies
+        commands = [
+            ("docker build .", "Build with Docker", ["docker"]),
+            ("pytest tests/", "Run Python tests", ["python"]),
+            ("git push origin main", "Push to Git", ["git"]),
+            ("npm run build", "Build Node app", ["node"]),
+        ]
+
+        for cmd, desc, tags in commands:
+            add_command.fn(
+                command=cmd,
+                description=desc,
+                tags=tags,
+                auto_detect_context=False,
+            )
+
+        # Verify all stacks were created
+        result = list_stacks.fn()
+        assert "Docker" in result
+        assert "Python" in result
+        assert "Git" in result
+        assert "Node" in result
+
+    def test_add_command_with_tag_creates_stack(self, neo4j_client):
+        """Test that tags also trigger stack creation."""
+        # Add a command with kubernetes tag
+        add_command.fn(
+            command="kubectl get pods",
+            description="List Kubernetes pods",
+            tags=["kubernetes"],
+            auto_detect_context=False,
+        )
+
+        # Verify Kubernetes stack was created
+        result = list_stacks.fn()
+        assert "Kubernetes" in result
+
+        # Verify command is linked
+        result = get_commands_by_stack.fn(stack_name="Kubernetes")
+        assert "kubectl get pods" in result

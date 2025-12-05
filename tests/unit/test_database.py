@@ -303,3 +303,326 @@ class TestNeo4jClient:
         categories = client.get_all_categories()
 
         assert categories == ["git", "docker", "kubernetes"]
+
+
+class TestStackAutoLinking:
+    """Tests for automatic stack detection and linking."""
+
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
+    def test_docker_build_creates_docker_stack_build_relationship(
+        self,
+        mock_uuid: Mock,
+        mock_graph_database: Mock,
+        mock_settings: Settings,
+    ) -> None:
+        """Test that 'docker build' command creates Docker stack with BUILD relationship."""
+        mock_uuid.return_value = "test-uuid"
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_graph_database.driver.return_value = mock_driver
+        mock_driver.session.return_value = mock_session
+
+        client = Neo4jClient(mock_settings)
+        cmd = Command(
+            command="docker build -t myapp .",
+            description="Build Docker image",
+            tags=[],
+        )
+
+        client.add_command(cmd)
+
+        # Verify stack linking was called
+        calls = mock_session.run.call_args_list
+        # Should have: 1) constraint creation calls, 2) add command, 3) stack link
+        stack_link_calls = [call for call in calls if "Stack" in str(call) and "MERGE" in str(call)]
+        assert len(stack_link_calls) >= 1
+
+        # Verify Docker stack with BUILD relationship
+        last_stack_call = stack_link_calls[-1]
+        query = last_stack_call[0][0]
+        assert "Docker" in str(last_stack_call)
+        assert "BUILD" in query
+
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
+    def test_pytest_creates_python_stack_test_relationship(
+        self,
+        mock_uuid: Mock,
+        mock_graph_database: Mock,
+        mock_settings: Settings,
+    ) -> None:
+        """Test that 'pytest' command creates Python stack with TEST relationship."""
+        mock_uuid.return_value = "test-uuid"
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_graph_database.driver.return_value = mock_driver
+        mock_driver.session.return_value = mock_session
+
+        client = Neo4jClient(mock_settings)
+        cmd = Command(
+            command="pytest tests/",
+            description="Run Python tests",
+            tags=[],
+        )
+
+        client.add_command(cmd)
+
+        # Verify stack linking
+        calls = mock_session.run.call_args_list
+        stack_link_calls = [call for call in calls if "Stack" in str(call) and "MERGE" in str(call)]
+        assert len(stack_link_calls) >= 1
+
+        # Verify Python stack with TEST relationship
+        last_stack_call = stack_link_calls[-1]
+        query = last_stack_call[0][0]
+        assert "Python" in str(last_stack_call)
+        assert "TEST" in query
+
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
+    def test_tag_based_stack_linking(
+        self,
+        mock_uuid: Mock,
+        mock_graph_database: Mock,
+        mock_settings: Settings,
+    ) -> None:
+        """Test that tags can trigger stack linking."""
+        mock_uuid.return_value = "test-uuid"
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_graph_database.driver.return_value = mock_driver
+        mock_driver.session.return_value = mock_session
+
+        client = Neo4jClient(mock_settings)
+        cmd = Command(
+            command="some custom command",
+            description="Custom command",
+            tags=["docker"],  # Tag should trigger Docker stack linking
+        )
+
+        client.add_command(cmd)
+
+        # Verify stack linking
+        calls = mock_session.run.call_args_list
+        stack_link_calls = [call for call in calls if "Stack" in str(call) and "MERGE" in str(call)]
+        assert len(stack_link_calls) >= 1
+        assert "Docker" in str(stack_link_calls[-1])
+
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
+    def test_git_push_creates_git_stack_deploy_relationship(
+        self,
+        mock_uuid: Mock,
+        mock_graph_database: Mock,
+        mock_settings: Settings,
+    ) -> None:
+        """Test that 'git push' command creates Git stack with DEPLOY relationship."""
+        mock_uuid.return_value = "test-uuid"
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_graph_database.driver.return_value = mock_driver
+        mock_driver.session.return_value = mock_session
+
+        client = Neo4jClient(mock_settings)
+        cmd = Command(
+            command="git push origin main",
+            description="Push changes to remote",
+            tags=["git"],
+        )
+
+        client.add_command(cmd)
+
+        # Verify stack linking
+        calls = mock_session.run.call_args_list
+        stack_link_calls = [call for call in calls if "Stack" in str(call) and "MERGE" in str(call)]
+        assert len(stack_link_calls) >= 1
+
+        # Should create Git stack with DEPLOY relationship
+        last_stack_call = stack_link_calls[-1]
+        query = last_stack_call[0][0]
+        assert "Git" in str(last_stack_call)
+        assert "DEPLOY" in query
+
+    @patch("lib.database.GraphDatabase")
+    @patch("lib.database.uuid.uuid4")
+    def test_npm_run_build_creates_node_stack_build_relationship(
+        self,
+        mock_uuid: Mock,
+        mock_graph_database: Mock,
+        mock_settings: Settings,
+    ) -> None:
+        """Test that 'npm run build' creates Node stack with BUILD relationship."""
+        mock_uuid.return_value = "test-uuid"
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_graph_database.driver.return_value = mock_driver
+        mock_driver.session.return_value = mock_session
+
+        client = Neo4jClient(mock_settings)
+        cmd = Command(
+            command="npm run build",
+            description="Build Node.js application",
+            tags=[],
+        )
+
+        client.add_command(cmd)
+
+        # Verify stack linking
+        calls = mock_session.run.call_args_list
+        stack_link_calls = [call for call in calls if "Stack" in str(call) and "MERGE" in str(call)]
+        assert len(stack_link_calls) >= 1
+
+        # Should create Node stack with BUILD relationship
+        last_stack_call = stack_link_calls[-1]
+        query = last_stack_call[0][0]
+        assert "Node" in str(last_stack_call)
+        assert "BUILD" in query
+
+
+class TestEdgeCases:
+    """Test edge cases."""
+
+    @patch("lib.database.GraphDatabase")
+    def test_search_commands_skips_invalid_timestamps(
+        self, mock_graph_database: Mock, mock_settings: Settings
+    ) -> None:
+        """Test that search_commands skips records with invalid timestamps."""
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+
+        # Create a record with invalid timestamp (None)
+        mock_record = {
+            "c": {
+                "id": "test-id",
+                "command": "test command",
+                "description": "test",
+                "created_at": None,  # Invalid timestamp
+                "last_used": None,
+                "use_count": 0,
+                "category": None,
+                "os_context": None,
+                "project_type": None,
+            },
+            "tags": [],
+        }
+
+        mock_result.__iter__ = Mock(return_value=iter([mock_record]))
+        mock_session.run.return_value = mock_result
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_driver.session.return_value = mock_session
+        mock_graph_database.driver.return_value = mock_driver
+
+        client = Neo4jClient(mock_settings)
+        results = client.search_commands("test")
+
+        # Should return empty list because invalid timestamp was skipped
+        assert results == []
+
+    @patch("lib.database.GraphDatabase")
+    def test_get_command_returns_none_for_invalid_timestamp(
+        self, mock_graph_database: Mock, mock_settings: Settings
+    ) -> None:
+        """Test that get_command returns None for invalid timestamps."""
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+
+        # Create a record with invalid timestamp
+        mock_record = {
+            "c": {
+                "id": "test-id",
+                "command": "test command",
+                "description": "test",
+                "created_at": None,  # Invalid
+                "last_used": None,
+                "use_count": 0,
+                "category": None,
+                "os_context": None,
+                "project_type": None,
+            },
+            "tags": [],
+        }
+
+        mock_result.single.return_value = mock_record
+        mock_session.run.return_value = mock_result
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_driver.session.return_value = mock_session
+        mock_graph_database.driver.return_value = mock_driver
+
+        client = Neo4jClient(mock_settings)
+        result = client.get_command("test-id")
+
+        assert result is None
+
+    @patch("lib.database.GraphDatabase")
+    def test_get_stack_returns_none_when_not_found(
+        self, mock_graph_database: Mock, mock_settings: Settings
+    ) -> None:
+        """Test that get_stack returns None when stack doesn't exist."""
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+
+        mock_result.single.return_value = None  # No stack found
+        mock_session.run.return_value = mock_result
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_driver.session.return_value = mock_session
+        mock_graph_database.driver.return_value = mock_driver
+
+        client = Neo4jClient(mock_settings)
+        result = client.get_stack("NonexistentStack")
+
+        assert result is None
+
+    @patch("lib.database.GraphDatabase")
+    def test_get_commands_by_stack_skips_invalid_timestamps(
+        self, mock_graph_database: Mock, mock_settings: Settings
+    ) -> None:
+        """Test that get_commands_by_stack skips records with invalid timestamps."""
+        mock_driver = Mock()
+        mock_session = Mock()
+        mock_result = Mock()
+
+        # Create a record with invalid timestamp
+        mock_record = {
+            "c": {
+                "id": "test-id",
+                "command": "test command",
+                "description": "test",
+                "created_at": None,  # Invalid
+                "last_used": None,
+                "use_count": 0,
+                "category": None,
+                "os_context": None,
+                "project_type": None,
+            },
+            "tags": [],
+        }
+
+        mock_result.__iter__ = Mock(return_value=iter([mock_record]))
+        mock_session.run.return_value = mock_result
+        mock_session.__enter__ = Mock(return_value=mock_session)
+        mock_session.__exit__ = Mock(return_value=False)
+        mock_driver.session.return_value = mock_session
+        mock_graph_database.driver.return_value = mock_driver
+
+        client = Neo4jClient(mock_settings)
+        results = client.get_commands_by_stack("Docker")
+
+        # Should return empty list because invalid timestamp was skipped
+        assert results == []

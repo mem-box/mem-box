@@ -332,3 +332,208 @@ class TestCLIIntegration:
         assert "docker build" in result.stdout
         assert "docker run" not in result.stdout
         assert "make build" not in result.stdout
+
+    def test_list_stacks(self, runner, neo4j_client):
+        """Test listing technology stacks."""
+        # Add commands that will create stacks
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker build -t app .",
+                "--desc",
+                "Build Docker image",
+                "-t",
+                "docker",
+                "--no-auto-context",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "add",
+                "pytest tests/",
+                "--desc",
+                "Run Python tests",
+                "-t",
+                "python",
+                "--no-auto-context",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "add",
+                "git push origin main",
+                "--desc",
+                "Push to remote",
+                "-t",
+                "git",
+                "--no-auto-context",
+            ],
+        )
+
+        # List stacks
+        result = runner.invoke(app, ["list-stacks"])
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "Python" in result.stdout
+        assert "Git" in result.stdout
+
+    def test_get_commands_by_stack(self, runner, neo4j_client):
+        """Test getting commands for a specific stack."""
+        # Add Docker commands with different purposes
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker build -t myapp .",
+                "--desc",
+                "Build Docker image",
+                "-t",
+                "docker",
+                "--no-auto-context",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker run -p 8080:80 myapp",
+                "--desc",
+                "Run Docker container",
+                "-t",
+                "docker",
+                "--no-auto-context",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "add",
+                "pytest tests/",
+                "--desc",
+                "Run tests",
+                "-t",
+                "python",
+                "--no-auto-context",
+            ],
+        )
+
+        # Get all Docker commands
+        result = runner.invoke(app, ["stack", "Docker"])
+        assert result.exit_code == 0
+        assert "docker build" in result.stdout
+        assert "docker run" in result.stdout
+        assert "pytest" not in result.stdout  # Should not include Python commands
+
+    def test_get_commands_by_stack_with_relationship_type(self, runner, neo4j_client):
+        """Test filtering commands by stack and relationship type."""
+        # Add Docker commands
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker build -t myapp .",
+                "--desc",
+                "Build Docker image",
+                "-t",
+                "docker",
+                "--no-auto-context",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker run -p 8080:80 myapp",
+                "--desc",
+                "Run Docker container",
+                "-t",
+                "docker",
+                "--no-auto-context",
+            ],
+        )
+
+        # Get only Docker BUILD commands
+        result = runner.invoke(app, ["stack", "Docker", "--type", "BUILD"])
+        assert result.exit_code == 0
+        assert "docker build" in result.stdout
+        assert "docker run" not in result.stdout  # Should not include RUN commands
+
+    def test_add_command_auto_creates_stack(self, runner, neo4j_client):
+        """Test that adding a command automatically creates the stack."""
+        # Verify no stacks exist initially
+        result = runner.invoke(app, ["list-stacks"])
+        assert "No stacks found" in result.stdout
+
+        # Add a Docker command
+        runner.invoke(
+            app,
+            [
+                "add",
+                "docker build -t myapp .",
+                "--desc",
+                "Build Docker image",
+                "--no-auto-context",
+            ],
+        )
+
+        # Verify Docker stack was created
+        result = runner.invoke(app, ["list-stacks"])
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "tool" in result.stdout.lower()
+
+        # Verify command is linked to stack
+        result = runner.invoke(app, ["stack", "Docker"])
+        assert result.exit_code == 0
+        assert "docker build" in result.stdout
+
+    def test_add_command_creates_multiple_stacks(self, runner, neo4j_client):
+        """Test that adding commands creates multiple stacks."""
+        # Add commands for different technologies
+        commands = [
+            ("docker build .", "Build with Docker", ["docker"]),
+            ("pytest tests/", "Run Python tests", ["python"]),
+            ("git push origin main", "Push to Git", ["git"]),
+            ("npm run build", "Build Node app", ["node"]),
+        ]
+
+        for cmd, desc, tags in commands:
+            runner.invoke(
+                app,
+                ["add", cmd, "--desc", desc, "-t", ",".join(tags), "--no-auto-context"],
+            )
+
+        # Verify all stacks were created
+        result = runner.invoke(app, ["list-stacks"])
+        assert result.exit_code == 0
+        assert "Docker" in result.stdout
+        assert "Python" in result.stdout
+        assert "Git" in result.stdout
+        assert "Node" in result.stdout
+
+    def test_add_command_with_tag_creates_stack(self, runner, neo4j_client):
+        """Test that tags also trigger stack creation."""
+        # Add a command with kubernetes tag
+        runner.invoke(
+            app,
+            [
+                "add",
+                "kubectl get pods",
+                "--desc",
+                "List Kubernetes pods",
+                "-t",
+                "kubernetes",
+                "--no-auto-context",
+            ],
+        )
+
+        # Verify Kubernetes stack was created
+        result = runner.invoke(app, ["list-stacks"])
+        assert "Kubernetes" in result.stdout
+
+        # Verify command is linked
+        result = runner.invoke(app, ["stack", "Kubernetes"])
+        assert "kubectl get pods" in result.stdout

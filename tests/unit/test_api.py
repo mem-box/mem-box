@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lib.api import MemoryBox
-from lib.models import Command, CommandWithMetadata
+from lib.models import Command, CommandWithMetadata, Stack
 
 
 @pytest.fixture
@@ -315,3 +315,84 @@ def test_increment_use_count_not_found():
         result = mb.increment_use_count("nonexistent")
 
         assert result is False
+
+
+def test_list_stacks():
+    """Test listing all stacks."""
+    with patch("lib.api.Neo4jClient") as mock_client:
+        mock_instance = MagicMock()
+        mock_stacks = [
+            Stack(name="Docker", type="tool", description="Container platform"),
+            Stack(name="Python", type="language", description="Programming language"),
+            Stack(name="Git", type="tool", description="Version control"),
+        ]
+        mock_instance.list_stacks.return_value = mock_stacks
+        mock_client.return_value = mock_instance
+
+        mb = MemoryBox()
+        stacks = mb.list_stacks()
+
+        assert len(stacks) == 3
+        assert stacks[0].name == "Docker"
+        assert stacks[1].name == "Python"
+        assert stacks[2].name == "Git"
+        mock_instance.list_stacks.assert_called_once()
+
+
+def test_get_commands_by_stack():
+    """Test getting commands for a specific stack."""
+    with patch("lib.api.Neo4jClient") as mock_client:
+        mock_instance = MagicMock()
+        mock_commands = [
+            CommandWithMetadata(
+                id="cmd-1",
+                command="docker build -t app .",
+                description="Build Docker image",
+                tags=["docker"],
+                created_at=datetime(2024, 1, 1, tzinfo=UTC),
+                use_count=5,
+            ),
+            CommandWithMetadata(
+                id="cmd-2",
+                command="docker run -p 8080:80 app",
+                description="Run Docker container",
+                tags=["docker"],
+                created_at=datetime(2024, 1, 2, tzinfo=UTC),
+                use_count=3,
+            ),
+        ]
+        mock_instance.get_commands_by_stack.return_value = mock_commands
+        mock_client.return_value = mock_instance
+
+        mb = MemoryBox()
+        commands = mb.get_commands_by_stack("Docker")
+
+        assert len(commands) == 2
+        assert commands[0].command == "docker build -t app ."
+        assert commands[1].command == "docker run -p 8080:80 app"
+        mock_instance.get_commands_by_stack.assert_called_once_with("Docker", None)
+
+
+def test_get_commands_by_stack_with_relationship_type():
+    """Test getting commands for a stack filtered by relationship type."""
+    with patch("lib.api.Neo4jClient") as mock_client:
+        mock_instance = MagicMock()
+        mock_commands = [
+            CommandWithMetadata(
+                id="cmd-1",
+                command="docker build -t app .",
+                description="Build Docker image",
+                tags=["docker"],
+                created_at=datetime(2024, 1, 1, tzinfo=UTC),
+                use_count=5,
+            ),
+        ]
+        mock_instance.get_commands_by_stack.return_value = mock_commands
+        mock_client.return_value = mock_instance
+
+        mb = MemoryBox()
+        commands = mb.get_commands_by_stack("Docker", relationship_type="BUILD")
+
+        assert len(commands) == 1
+        assert commands[0].command == "docker build -t app ."
+        mock_instance.get_commands_by_stack.assert_called_once_with("Docker", "BUILD")
