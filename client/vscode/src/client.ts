@@ -59,13 +59,64 @@ export class MemoryBoxClient {
     constructor(private pythonPath: string = 'python') { }
 
     /**
-     * Start the Memory Box bridge process
+     * Check if mem-box is installed
+     */
+    private async isInstalled(): Promise<boolean> {
+        return new Promise((resolve) => {
+            const checkProcess = spawn(this.pythonPath, ['-m', 'pip', 'show', 'mem-box']);
+            checkProcess.on('exit', (code: number | null) => {
+                resolve(code === 0);
+            });
+            checkProcess.on('error', () => {
+                resolve(false);
+            });
+        });
+    }
+
+    /**
+     * Install mem-box package
+     */
+    private async installPackage(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            console.log('[Mem Box] Installing mem-box package...');
+            const installProcess = spawn(this.pythonPath, ['-m', 'pip', 'install', 'mem-box']);
+
+            let stderr = '';
+            installProcess.stderr?.on('data', (data: Buffer) => {
+                stderr += data.toString();
+            });
+
+            installProcess.on('exit', (code: number | null) => {
+                if (code === 0) {
+                    console.log('[Mem Box] Package installed successfully');
+                    resolve();
+                } else {
+                    console.error('[Mem Box] Installation failed:', stderr);
+                    reject(new Error(`Failed to install mem-box: ${stderr}`));
+                }
+            });
+
+            installProcess.on('error', (error: Error) => {
+                reject(error);
+            });
+        });
+    }
+
+    /**
+     * Start the Mem Box bridge process
      */
     async start(config?: {
         neo4jUri?: string;
         neo4jUser?: string;
         neo4jPassword?: string;
     }): Promise<void> {
+        // Check if mem-box is installed, and install it if not
+        const installed = await this.isInstalled();
+        if (!installed) {
+            console.log('[Mem Box] Package not found, installing...');
+            await this.installPackage();
+        }
+
         return new Promise((resolve, reject) => {
             // Build args
             const args = ['-m', 'server.bridge'];

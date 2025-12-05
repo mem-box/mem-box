@@ -1,9 +1,13 @@
 {
-    "name": "memory-box-vscode",
-    "displayName": "Memory Box",
+    "name": "mem-box-vscode",
+    "displayName": "Mem Box",
     "description": "Automatically capture and search terminal commands",
     "version": "0.1.0",
-    "publisher": "memory-box",
+    "publisher": "mem-box",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/mem-box/mem-box"
+    },
     "engines": {
         "vscode": "^1.85.0"
     },
@@ -17,22 +21,22 @@
     "contributes": {
         "commands": [
             {
-                "command": "memoryBox.searchCommands",
-                "title": "Memory Box: Search Commands"
+                "command": "memBox.searchCommands",
+                "title": "Mem Box: Search Commands"
             },
             {
-                "command": "memoryBox.addCommand",
-                "title": "Memory Box: Add Command Manually"
+                "command": "memBox.addCommand",
+                "title": "Mem Box: Add Command Manually"
             },
             {
-                "command": "memoryBox.toggleAutoCapture",
-                "title": "Memory Box: Toggle Auto-Capture"
+                "command": "memBox.toggleAutoCapture",
+                "title": "Mem Box: Toggle Auto-Capture"
             }
         ],
         "configuration": {
-            "title": "Memory Box",
+            "title": "Mem Box",
             "properties": {
-                "memoryBox.autoCapture": {
+                "memBox.autoCapture": {
                     "type": "boolean",
                     "default": true,
                     "description": "Automatically capture terminal commands"
@@ -40,7 +44,7 @@
                 "memoryBox.pythonPath": {
                     "type": "string",
                     "default": "python",
-                    "description": "Path to Python executable (memory-box must be installed)"
+                    "description": "Path to Python executable (mem-box must be installed)"
                 },
                 "memoryBox.captureExitCodeZeroOnly": {
                     "type": "boolean",

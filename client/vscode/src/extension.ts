@@ -1,17 +1,17 @@
 import * as vscode from 'vscode';
 import { MemoryBoxClient } from './client';
 
-let memoryBoxClient: MemoryBoxClient | undefined;
+let memBoxClient: MemoryBoxClient | undefined;
 let autoCapture = true;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Memory Box extension is activating...');
+    console.log('Mem Box extension is activating...');
 
     // Load config
-    const config = vscode.workspace.getConfiguration('memoryBox');
+    const config = vscode.workspace.getConfiguration('memBox');
 
-    // Initialize Memory Box client
-    memoryBoxClient = new MemoryBoxClient();
+    // Initialize Mem Box client
+    memBoxClient = new MemoryBoxClient();
 
     // Get DB config from settings
     const neo4jUri = config.get<string>('neo4jUri');
@@ -25,12 +25,12 @@ export function activate(context: vscode.ExtensionContext) {
     };
 
     // Start the bridge process with config
-    memoryBoxClient.start(dbConfig).then(() => {
-        console.log('Memory Box bridge started successfully');
+    memBoxClient.start(dbConfig).then(() => {
+        console.log('Mem Box bridge started successfully');
     }).catch((err) => {
-        console.error('Failed to start Memory Box bridge:', err);
+        console.error('Failed to start Mem Box bridge:', err);
         vscode.window.showErrorMessage(
-            'Memory Box: Failed to start. Make sure memory-box is installed (pip install memory-box)'
+            'Mem Box: Failed to start. Make sure mem-box is installed (pip install mem-box)'
         );
     });
 
@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register terminal execution listener for auto-capture
     const executionListener = vscode.window.onDidEndTerminalShellExecution(async (event) => {
-        if (!autoCapture || !memoryBoxClient) {
+        if (!autoCapture || !memBoxClient) {
             return;
         }
 
@@ -63,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
         const context = workspaceFolder?.uri.fsPath;
 
         try {
-            const commandId = await memoryBoxClient.addCommand(commandLine, '', {
+            const commandId = await memBoxClient.addCommand(commandLine, '', {
                 context,
                 category: exitCode === 0 ? 'success' : 'failed'
             });
@@ -76,10 +76,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register search command
     const searchCommand = vscode.commands.registerCommand(
-        'memoryBox.searchCommands',
+        'memBox.searchCommands',
         async () => {
-            if (!memoryBoxClient) {
-                vscode.window.showErrorMessage('Memory Box is not initialized');
+            if (!memBoxClient) {
+                vscode.window.showErrorMessage('Mem Box is not initialized');
                 return;
             }
 
@@ -93,7 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             try {
-                const results = await memoryBoxClient.searchCommands(query, {
+                const results = await memBoxClient.searchCommands(query, {
                     fuzzy: true,
                     limit: 20
                 });
@@ -145,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
                             }
 
                             case 'run': {
-                                const newTerminal = vscode.window.createTerminal('Memory Box');
+                                const newTerminal = vscode.window.createTerminal('Mem Box');
                                 newTerminal.show();
                                 newTerminal.sendText(selected.label);
                                 break;
@@ -161,10 +161,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register manual add command
     const addCommand = vscode.commands.registerCommand(
-        'memoryBox.addCommand',
+        'memBox.addCommand',
         async () => {
-            if (!memoryBoxClient) {
-                vscode.window.showErrorMessage('Memory Box is not initialized');
+            if (!memBoxClient) {
+                vscode.window.showErrorMessage('Mem Box is not initialized');
                 return;
             }
 
@@ -193,7 +193,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             try {
                 const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                const commandId = await memoryBoxClient.addCommand(command, description || '', {
+                const commandId = await memBoxClient.addCommand(command, description || '', {
                     tags,
                     context: workspaceFolder?.uri.fsPath
                 });
@@ -207,7 +207,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register toggle auto-capture command
     const toggleCommand = vscode.commands.registerCommand(
-        'memoryBox.toggleAutoCapture',
+        'memBox.toggleAutoCapture',
         async () => {
             autoCapture = !autoCapture;
 
@@ -215,7 +215,7 @@ export function activate(context: vscode.ExtensionContext) {
             await config.update('autoCapture', autoCapture, vscode.ConfigurationTarget.Global);
 
             const status = autoCapture ? 'enabled' : 'disabled';
-            vscode.window.showInformationMessage(`Memory Box auto-capture ${status}`);
+            vscode.window.showInformationMessage(`Mem Box auto-capture ${status}`);
         }
     );
 
@@ -227,18 +227,18 @@ export function activate(context: vscode.ExtensionContext) {
         toggleCommand,
         {
             dispose: () => {
-                if (memoryBoxClient) {
-                    memoryBoxClient.stop();
+                if (memBoxClient) {
+                    memBoxClient.stop();
                 }
             }
         }
     );
 
-    console.log('Memory Box extension activated');
+    console.log('Mem Box extension activated');
 }
 
 export function deactivate() {
-    if (memoryBoxClient) {
-        memoryBoxClient.stop();
+    if (memBoxClient) {
+        memBoxClient.stop();
     }
 }
