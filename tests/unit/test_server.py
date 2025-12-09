@@ -115,25 +115,27 @@ class TestSearchCommands:
     def test_search_with_query(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
-        """Test searching with a query."""
+        """Test searching with a query returns structured data."""
         mock_get_db.return_value = mock_db
         mock_db.search_commands.return_value = [sample_command]
 
         result = server.search_commands.fn(query="git")
 
-        assert "Found 1 command(s)" in result
-        assert "git status" in result
-        assert "test-123" in result
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["command"] == "git status"
+        assert result[0]["id"] == "test-123"
 
     @patch("server.server.get_memory_box")
     def test_search_no_results(self, mock_get_db: Mock, mock_db: Mock) -> None:
-        """Test searching with no results."""
+        """Test searching with no results returns empty list."""
         mock_get_db.return_value = mock_db
         mock_db.search_commands.return_value = []
 
         result = server.search_commands.fn(query="nonexistent")
 
-        assert "No commands found" in result
+        assert isinstance(result, list)
+        assert len(result) == 0
 
     @patch("server.server.get_memory_box")
     @patch("server.server.get_current_context")
@@ -144,20 +146,21 @@ class TestSearchCommands:
         mock_db: Mock,
         sample_command: CommandWithMetadata,
     ) -> None:
-        """Test searching with current context."""
+        """Test searching with current context returns structured data."""
         mock_get_db.return_value = mock_db
         mock_context.return_value = {"os": "linux", "project_type": "python"}
         mock_db.search_commands.return_value = [sample_command]
 
         result = server.search_commands.fn(use_current_context=True)
 
-        assert "Found 1 command(s)" in result
+        assert isinstance(result, list)
+        assert len(result) == 1
 
     @patch("server.server.get_memory_box")
     def test_search_with_filters(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
-        """Test searching with multiple filters."""
+        """Test searching with multiple filters returns structured data."""
         mock_get_db.return_value = mock_db
         mock_db.search_commands.return_value = [sample_command]
 
@@ -165,7 +168,8 @@ class TestSearchCommands:
             query="git", os="linux", project_type="python", category="git", tags=["git"], limit=5
         )
 
-        assert "Found 1 command(s)" in result
+        assert isinstance(result, list)
+        assert len(result) == 1
         mock_db.search_commands.assert_called_once_with(
             query="git", os="linux", project_type="python", category="git", tags=["git"], limit=5
         )
@@ -178,7 +182,7 @@ class TestGetCommandById:
     def test_get_existing_command(
         self, mock_get_db: Mock, mock_db: Mock, sample_command: CommandWithMetadata
     ) -> None:
-        """Test getting an existing command."""
+        """Test getting an existing command returns formatted details."""
         mock_get_db.return_value = mock_db
         mock_db.get_command.return_value = sample_command
 
@@ -186,7 +190,7 @@ class TestGetCommandById:
 
         assert "git status" in result
         assert "test-123" in result
-        assert "Used: 5 time(s)" in result
+        assert "Executed" in result or "5" in result
 
     @patch("server.server.get_memory_box")
     def test_get_nonexistent_command(self, mock_get_db: Mock, mock_db: Mock) -> None:

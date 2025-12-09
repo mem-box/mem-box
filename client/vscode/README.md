@@ -27,7 +27,7 @@ pip install memory-box
 Or from source:
 ```bash
 cd /workspace
-pip install -e .
+uv sync
 ```
 
 ### 2. Install Extension Dependencies

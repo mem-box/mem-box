@@ -90,4 +90,4 @@ echo -e "  • Python: ${BLUE}${MEMORY_BOX_PYTHON:-python3}${NC}"
 echo -e "  • Success only: ${BLUE}$([ "$SUCCESS_ONLY" = "y" ] || [ "$SUCCESS_ONLY" = "Y" ] && echo "Yes" || echo "No")${NC}"
 
 echo -e "\n${YELLOW}Note:${NC} Make sure Memory Box is installed:"
-echo -e "  ${BLUE}pip install -e .${NC}"
+echo -e "  ${BLUE}uv sync${NC}"

@@ -742,9 +742,11 @@ class TestFuzzySearchIntegration:
         # Should not match
         assert len(results) == 0
 
-    def test_fuzzy_search_highest_use_count_first(self, db_client: Neo4jClient) -> None:
-        """Test that commands with highest use_count are returned first."""
-        # Add multiple similar commands
+    def test_fuzzy_search_highest_execution_count_first(self, db_client: Neo4jClient) -> None:
+        """Test that commands with highest execution_count are returned first."""
+        # Add multiple similar commands with different execution counts
+        # Note: We can't increment execution_count via get_command anymore,
+        # so we'll test the sorting logic works if execution_count is set
         cmd1 = Command(command="docker ps", description="List docker containers", tags=["docker"])
         cmd2 = Command(
             command="docker ps -a", description="List all docker containers", tags=["docker"]
@@ -754,39 +756,34 @@ class TestFuzzySearchIntegration:
         )
 
         db_client.add_command(cmd1)
-        db_client.add_command(cmd2)
-        db_client.add_command(cmd3)
+        id2 = db_client.add_command(cmd2)
+        id3 = db_client.add_command(cmd3)
 
-        # Increment use_count for cmd2 (5 times)
-        cmd2_stored = db_client.search_commands(query="ps -a", fuzzy=False)[0]
-        for _ in range(5):
-            db_client.get_command(cmd2_stored.id)
+        # Manually set execution_count in database for testing
+        with db_client.driver.session(database=db_client.database) as session:
+            session.run("MATCH (c:Command {id: $id}) SET c.execution_count = 5", id=id2)
+            session.run("MATCH (c:Command {id: $id}) SET c.execution_count = 10", id=id3)
 
-        # Increment use_count for cmd3 (10 times - highest)
-        cmd3_stored = db_client.search_commands(query="ps -q", fuzzy=False)[0]
-        for _ in range(10):
-            db_client.get_command(cmd3_stored.id)
-
-        # Search with fuzzy - all should have same score
+        # Search with fuzzy - all should have similar scores
         results = db_client.search_commands(query="docker ps", fuzzy=True, fuzzy_threshold=60)
 
         # Should have all three
         assert len(results) >= 3
 
-        # Highest use_count should be first (cmd3 with 10)
+        # Highest execution_count should be first (cmd3 with 10)
         assert results[0].command == "docker ps -q"
-        assert results[0].use_count == 10
+        assert results[0].execution_count == 10
 
         # Second highest should be cmd2 (5)
         assert results[1].command == "docker ps -a"
-        assert results[1].use_count == 5
+        assert results[1].execution_count == 5
 
         # Lowest should be cmd1 (0)
         assert results[2].command == "docker ps"
-        assert results[2].use_count == 0
+        assert results[2].execution_count == 0
 
-    def test_fuzzy_search_tie_score_sorted_by_use_count(self, db_client: Neo4jClient) -> None:
-        """Test that when fuzzy scores tie, use_count determines order."""
+    def test_fuzzy_search_tie_score_sorted_by_execution_count(self, db_client: Neo4jClient) -> None:
+        """Test that when fuzzy scores tie, execution_count determines order."""
         # Add commands with different text to avoid deduplication
         cmd1 = Command(command="kubectl get pods", description="Get all pods", tags=["k8s"])
         cmd2 = Command(
@@ -796,57 +793,51 @@ class TestFuzzySearchIntegration:
         )
 
         db_client.add_command(cmd1)
-        db_client.add_command(cmd2)
+        id2 = db_client.add_command(cmd2)
 
-        # Make cmd2 more popular
-        cmd2_stored = db_client.search_commands(query="deployments", fuzzy=False)[0]
-        for _ in range(8):
-            db_client.get_command(cmd2_stored.id)
+        # Set execution_count for cmd2
+        with db_client.driver.session(database=db_client.database) as session:
+            session.run("MATCH (c:Command {id: $id}) SET c.execution_count = 8", id=id2)
 
         # Search - both will have similar fuzzy scores for "kubectl"
         results = db_client.search_commands(query="kubectl", fuzzy=True, fuzzy_threshold=50)
 
         assert len(results) >= 2
 
-        # Higher use_count should be first
-        assert results[0].use_count == 8
+        # Higher execution_count should be first
+        assert results[0].execution_count == 8
         assert results[0].command == "kubectl get deployments"
 
-    def test_exact_search_respects_use_count_order(self, db_client: Neo4jClient) -> None:
-        """Test that exact search also orders by use_count."""
+    def test_exact_search_respects_execution_count_order(self, db_client: Neo4jClient) -> None:
+        """Test that exact search also orders by execution_count."""
         # Add multiple commands with "git" in them
         cmd1 = Command(command="git status", description="Show git status", tags=["git"])
         cmd2 = Command(command="git log", description="Show git log", tags=["git"])
         cmd3 = Command(command="git commit", description="Commit changes", tags=["git"])
 
         db_client.add_command(cmd1)
-        db_client.add_command(cmd2)
-        db_client.add_command(cmd3)
+        id2 = db_client.add_command(cmd2)
+        id3 = db_client.add_command(cmd3)
 
-        # Make cmd2 most popular
-        cmd2_stored = db_client.search_commands(query="git log", fuzzy=False)[0]
-        for _ in range(15):
-            db_client.get_command(cmd2_stored.id)
-
-        # Make cmd3 second most popular
-        cmd3_stored = db_client.search_commands(query="git commit", fuzzy=False)[0]
-        for _ in range(7):
-            db_client.get_command(cmd3_stored.id)
+        # Set execution_count: cmd2 most popular, cmd3 second
+        with db_client.driver.session(database=db_client.database) as session:
+            session.run("MATCH (c:Command {id: $id}) SET c.execution_count = 15", id=id2)
+            session.run("MATCH (c:Command {id: $id}) SET c.execution_count = 7", id=id3)
 
         # Exact search for "git"
         results = db_client.search_commands(query="git", fuzzy=False)
 
         assert len(results) >= 3
 
-        # Should be ordered by use_count
+        # Should be ordered by execution_count
         assert results[0].command == "git log"
-        assert results[0].use_count == 15
+        assert results[0].execution_count == 15
 
         assert results[1].command == "git commit"
-        assert results[1].use_count == 7
+        assert results[1].execution_count == 7
 
         assert results[2].command == "git status"
-        assert results[2].use_count == 0
+        assert results[2].execution_count == 0
 
     def test_fuzzy_search_use_count_overrides_slight_score_diff(
         self, db_client: Neo4jClient

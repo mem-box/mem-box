@@ -73,11 +73,8 @@ Or download from [neo4j.com/download](https://neo4j.com/download/)
 git clone https://github.com/mem-box/mem-box.git
 cd mem-box
 
-# Install with uv (recommended)
+# Install dependencies
 uv sync
-
-# Or with pip
-pip install -e .
 ```
 
 #### 3. Configure Environment
@@ -346,7 +343,7 @@ cd mem-box
 docker-compose -f .devcontainer/docker-compose.yml up -d neo4j
 
 # Install in development mode with dev dependencies
-pip install -e ".[dev]"
+uv sync --all-extras
 
 # Copy environment configuration
 cp .env.example .env

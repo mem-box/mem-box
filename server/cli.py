@@ -126,7 +126,7 @@ def search(
 
         context_str = "\n".join(context_parts) if context_parts else "-"
 
-        table.add_row(cmd.description, cmd.command, context_str, str(cmd.use_count))
+        table.add_row(cmd.description, cmd.command, context_str, str(cmd.execution_count))
 
     console.print(table)
     mb.close()
@@ -165,7 +165,7 @@ def get(command_id: str = typer.Argument(..., help="Command ID")) -> None:
     if cmd.context:
         details += f"[bold cyan]Context:[/bold cyan] {cmd.context}\n"
 
-    details += f"\n[dim]Used {cmd.use_count} time(s) • Created {cmd.created_at}[/dim]"
+    details += f"\n[dim]Executed {cmd.execution_count} time(s) • Created {cmd.created_at}[/dim]"
 
     console.print(Panel(details, title="Command Details", border_style="blue"))
     mb.close()

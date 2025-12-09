@@ -31,32 +31,14 @@ class MemoryBox:
         'command-id-456'
     """
 
-    def __init__(
-        self,
-        neo4j_uri: str | None = None,
-        neo4j_user: str | None = None,
-        neo4j_password: str | None = None,
-        neo4j_database: str | None = None,
-    ) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
         """Initialize Memory Box API.
 
         Args:
-            neo4j_uri: Neo4j connection URI (default: from env or settings)
-            neo4j_user: Neo4j username (default: from env or settings)
-            neo4j_password: Neo4j password (default: from env or settings)
-            neo4j_database: Neo4j database name (default: from env or settings)
+            settings: Settings object (defaults to loading from environment)
         """
-        settings = Settings()
-
-        # Override settings if provided
-        if neo4j_uri:
-            settings.neo4j_uri = neo4j_uri
-        if neo4j_user:
-            settings.neo4j_user = neo4j_user
-        if neo4j_password:
-            settings.neo4j_password = neo4j_password
-        if neo4j_database:
-            settings.neo4j_database = neo4j_database
+        if settings is None:
+            settings = Settings()
 
         self._client = Neo4jClient(settings)
 
@@ -226,27 +208,6 @@ class MemoryBox:
             True
         """
         return self._client.delete_command(command_id)
-
-    def increment_use_count(self, command_id: str) -> bool:
-        """Increment the use count for a command.
-
-        This is typically called automatically when a command is executed.
-
-        Args:
-            command_id: The command ID
-
-        Returns:
-            True if incremented, False if command not found
-
-        Example:
-            >>> mb.increment_use_count("abc-123")
-            True
-        """
-        # Note: DatabaseClient doesn't have this method yet
-        # For now, we get and re-add, but this should be a direct DB operation
-        cmd = self._client.get_command(command_id)
-        # This is a placeholder - ideally Neo4jClient would have increment_use_count
-        return cmd is not None
 
     def get_all_tags(self) -> list[str]:
         """Get all tags used in the memory box.

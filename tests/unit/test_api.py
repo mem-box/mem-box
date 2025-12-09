@@ -7,6 +7,7 @@ import pytest
 
 from lib.api import MemoryBox
 from lib.models import Command, CommandWithMetadata
+from lib.settings import Settings
 
 
 @pytest.fixture
@@ -30,13 +31,14 @@ def test_memory_box_initialization_with_defaults(mock_client):
 
 
 def test_memory_box_initialization_with_custom_params(mock_client):
-    """Test MemoryBox accepts custom connection parameters."""
-    mb = MemoryBox(
+    """Test MemoryBox accepts custom Settings object."""
+    custom_settings = Settings(
         neo4j_uri="bolt://custom:7687",
         neo4j_user="custom_user",
         neo4j_password="custom_pass",
         neo4j_database="custom_db",
     )
+    mb = MemoryBox(settings=custom_settings)
     mock_client.assert_called_once()
     mb.close()
 
@@ -281,37 +283,3 @@ def test_context_manager():
             assert mb is not None
 
         mock_instance.close.assert_called_once()
-
-
-def test_increment_use_count(sample_datetime):
-    """Test incrementing use count for a command."""
-    with patch("lib.api.Neo4jClient") as mock_client:
-        mock_instance = MagicMock()
-        mock_instance.get_command.return_value = CommandWithMetadata(
-            id="test-123",
-            command="docker ps",
-            description="",
-            tags=[],
-            created_at=sample_datetime,
-            use_count=1,
-        )
-        mock_client.return_value = mock_instance
-
-        mb = MemoryBox()
-        result = mb.increment_use_count("test-123")
-
-        assert result is True
-        mock_instance.get_command.assert_called_once_with("test-123")
-
-
-def test_increment_use_count_not_found():
-    """Test increment_use_count returns False when command not found."""
-    with patch("lib.api.Neo4jClient") as mock_client:
-        mock_instance = MagicMock()
-        mock_instance.get_command.return_value = None
-        mock_client.return_value = mock_instance
-
-        mb = MemoryBox()
-        result = mb.increment_use_count("nonexistent")
-
-        assert result is False

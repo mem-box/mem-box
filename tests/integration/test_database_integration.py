@@ -1,6 +1,5 @@
 """Integration tests for Neo4j database."""
 
-import time
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime
@@ -81,7 +80,7 @@ class TestNeo4jIntegration:
         assert retrieved.os == "linux"
         assert retrieved.project_type == "python"
         assert retrieved.category == "git"
-        assert retrieved.use_count == 1  # Incremented when retrieved
+        assert retrieved.execution_count == 0  # Not incremented by retrieval
 
     def test_search_commands_by_query(self, db_client: Neo4jClient) -> None:
         """Test searching commands by text query."""
@@ -260,36 +259,28 @@ class TestNeo4jIntegration:
         assert len(categories) >= 2
         assert {"cat1", "cat2"}.issubset(set(categories))
 
-    def test_use_count_increment(self, db_client: Neo4jClient) -> None:
-        """Test that use count increments when retrieving commands."""
-        cmd = Command(command="test command", description="Test use count", tags=["test"])
+    def test_execution_count_not_incremented_by_retrieval(self, db_client: Neo4jClient) -> None:
+        """Test that execution count is NOT incremented when retrieving commands."""
+        cmd = Command(command="test command", description="Test execution count", tags=["test"])
 
         command_id = db_client.add_command(cmd)
 
-        # Retrieve multiple times
-        for i in range(1, 4):
+        # Retrieve multiple times - execution count should stay 0
+        for _ in range(1, 4):
             retrieved = db_client.get_command(command_id)
             assert retrieved is not None
-            assert retrieved.use_count == i
+            assert retrieved.execution_count == 0  # Not incremented by retrieval
 
     def test_last_used_timestamp(self, db_client: Neo4jClient) -> None:
-        """Test that last_used timestamp is updated."""
+        """Test that last_used timestamp is None initially (not updated by retrieval)."""
         cmd = Command(command="test command", description="Test timestamp", tags=["test"])
 
         command_id = db_client.add_command(cmd)
 
-        # First retrieval should set last_used
+        # Retrieval should NOT set last_used (that's for execution tracking)
         retrieved = db_client.get_command(command_id)
         assert retrieved is not None
-        assert retrieved.last_used is not None
-        first_used = retrieved.last_used
-
-        # Second retrieval should update last_used
-        time.sleep(0.1)  # Small delay to ensure different timestamp
-        retrieved = db_client.get_command(command_id)
-        assert retrieved is not None
-        assert retrieved.last_used is not None
-        assert retrieved.last_used >= first_used
+        assert retrieved.last_used is None  # Not set by retrieval anymore
 
     def test_search_with_limit(self, db_client: Neo4jClient) -> None:
         """Test that search respects limit parameter."""

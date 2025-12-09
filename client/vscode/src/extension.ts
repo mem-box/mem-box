@@ -33,7 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
     memBoxClient.start(dbConfig).catch((err) => {
         console.error('Failed to start Mem Box bridge:', err);
         vscode.window.showErrorMessage(
-            'Mem Box: Failed to start. Make sure mem-box is installed (pip install mem-box)'
+            'Mem Box: Failed to start. Make sure mem-box is installed (uv sync or pip install mem-box)'
         );
     });
 

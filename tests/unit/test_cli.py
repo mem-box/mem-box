@@ -33,7 +33,9 @@ def sample_command() -> CommandWithMetadata:
         context="Use to check git status",
         category="git",
         created_at=datetime.now(tz=UTC),
-        use_count=5,
+        execution_count=5,
+        success_count=4,
+        failure_count=1,
     )
 
 

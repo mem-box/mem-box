@@ -364,7 +364,7 @@ class Neo4jClient:
              collect(DISTINCT os.name) as oses,
              collect(DISTINCT cat.name) as categories,
              collect(DISTINCT pt.name) as project_types
-        ORDER BY c.use_count DESC, c.created_at DESC
+        ORDER BY c.execution_count DESC, c.created_at DESC
         RETURN c, tags, oses, categories, project_types
         """
 
@@ -383,7 +383,7 @@ class Neo4jClient:
              collect(DISTINCT os.name) as oses,
              collect(DISTINCT cat.name) as categories,
              collect(DISTINCT pt.name) as project_types
-        ORDER BY c.use_count DESC, c.created_at DESC
+        ORDER BY c.execution_count DESC, c.created_at DESC
         RETURN c, tags, oses, categories, project_types
         """
 
@@ -447,21 +447,18 @@ class Neo4jClient:
             if max_score >= threshold:
                 scored_commands.append((max_score, cmd))
 
-        # Sort by score (highest first), then by use count
-        scored_commands.sort(key=lambda x: (-x[0], -x[1].use_count))
+        # Sort by score (highest first), then by execution count
+        scored_commands.sort(key=lambda x: (-x[0], -x[1].execution_count))
 
         return [cmd for _, cmd in scored_commands[:limit]]
 
     def get_command(self, command_id: str) -> CommandWithMetadata | None:
-        """Get a specific command by ID and increment its use count."""
+        """Get a specific command by ID."""
 
         with self.driver.session(database=self.database) as session:
             result = session.run(
                 """
                 MATCH (c:Command {id: $id})
-                SET c.use_count = c.use_count + 1,
-                    c.last_used = datetime($now)
-                WITH c
                 OPTIONAL MATCH (c)-[:TAGGED_WITH]->(t:Tag)
                 OPTIONAL MATCH (c)-[:RUNS_ON]->(os:OS)
                 OPTIONAL MATCH (c)-[:HAS_CATEGORY]->(cat:Category)

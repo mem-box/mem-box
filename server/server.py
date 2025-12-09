@@ -100,7 +100,7 @@ def search_commands(
     tags: list[str] | None = None,
     limit: int = 10,
     use_current_context: bool = False,
-) -> str:
+) -> list[dict]:
     """
     Search for commands in your memory box.
 
@@ -114,7 +114,7 @@ def search_commands(
         use_current_context: Auto-detect and use current OS and project type
 
     Returns:
-        Formatted list of matching commands
+        List of matching commands with full metadata including execution counts
     """
     mb = get_memory_box()
 
@@ -125,35 +125,8 @@ def search_commands(
         query=query, os=os, project_type=project_type, category=category, tags=tags, limit=limit
     )
 
-    if not commands:
-        return "No commands found matching your criteria."
-
-    result = [f"Found {len(commands)} command(s):\n"]
-
-    for i, cmd in enumerate(commands, 1):
-        result.append(f"\n{i}. {cmd.description}")
-        result.append(f"   Command: {cmd.command}")
-        result.append(f"   ID: {cmd.id}")
-
-        metadata = []
-        if cmd.os:
-            metadata.append(f"OS: {cmd.os}")
-        if cmd.project_type:
-            metadata.append(f"Project: {cmd.project_type}")
-        if cmd.category:
-            metadata.append(f"Category: {cmd.category}")
-        if cmd.tags:
-            metadata.append(f"Tags: {', '.join(cmd.tags)}")
-
-        if metadata:
-            result.append(f"   {' | '.join(metadata)}")
-
-        if cmd.context:
-            result.append(f"   Context: {cmd.context}")
-
-        result.append(f"   Used {cmd.use_count} time(s)")
-
-    return "\n".join(result)
+    # Return structured data with all metadata
+    return [cmd.model_dump() for cmd in commands]
 
 
 @mcp.tool()
@@ -190,7 +163,10 @@ def get_command_by_id(command_id: str) -> str:
     if cmd.context:
         result.append(f"Context: {cmd.context}")
 
-    result.append(f"Used: {cmd.use_count} time(s)")
+    result.append(
+        f"Executed: {cmd.execution_count} time(s) "
+        f"({cmd.success_count} success, {cmd.failure_count} failed)"
+    )
     result.append(f"Created: {cmd.created_at}")
     if cmd.last_used:
         result.append(f"Last Used: {cmd.last_used}")

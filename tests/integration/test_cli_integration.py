@@ -1,27 +1,59 @@
 """Integration tests for CLI with real Neo4j database."""
 
+from collections.abc import Generator
+
 import pytest
+from testcontainers.neo4j import Neo4jContainer
 from typer.testing import CliRunner
 
 from lib.database import Neo4jClient
-from lib.settings import get_settings
+from lib.settings import Settings
 from server.cli import app
 
 
 @pytest.fixture(scope="module")
-def neo4j_client():
+def neo4j_container() -> Generator[Neo4jContainer, None, None]:
+    """Start a Neo4j container for testing."""
+    with Neo4jContainer("neo4j:5-community") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def neo4j_settings(neo4j_container: Neo4jContainer) -> Settings:
+    """Create settings for Neo4j test database."""
+    return Settings(
+        neo4j_uri=neo4j_container.get_connection_url(),
+        neo4j_user=neo4j_container.username,
+        neo4j_password=neo4j_container.password,
+        neo4j_database="neo4j",
+    )
+
+
+@pytest.fixture
+def neo4j_client(neo4j_settings: Settings) -> Generator[Neo4jClient, None, None]:
     """Create a Neo4j client for integration tests."""
-    settings = get_settings()
-    client = Neo4jClient(settings)
+    client = Neo4jClient(neo4j_settings)
+
+    # Clean before test
+    with client.driver.session(database=client.database) as session:
+        session.run("MATCH (n) DETACH DELETE n")
+
     yield client
+
+    # Clean after test
+    with client.driver.session(database=client.database) as session:
+        session.run("MATCH (n) DETACH DELETE n")
+
     client.close()
 
 
 @pytest.fixture(autouse=True)
-def clean_database(neo4j_client):
-    """Clean the database before each test."""
-    with neo4j_client.driver.session(database=neo4j_client.database) as session:
-        session.run("MATCH (n) DETACH DELETE n")
+def patch_environment(neo4j_settings: Settings, monkeypatch):
+    """Patch environment variables to use test container."""
+    monkeypatch.setenv("NEO4J_URI", neo4j_settings.neo4j_uri)
+    monkeypatch.setenv("NEO4J_USER", neo4j_settings.neo4j_user)
+    monkeypatch.setenv("NEO4J_PASSWORD", neo4j_settings.neo4j_password)
+    monkeypatch.setenv("NEO4J_DATABASE", neo4j_settings.neo4j_database)
 
 
 @pytest.fixture

@@ -1,9 +1,14 @@
-"""Integration tests for MCP server with real Neo4j database."""
+"""Integration tests for MCP server with test Neo4j container."""
+
+from collections.abc import Generator
 
 import pytest
+from testcontainers.neo4j import Neo4jContainer
 
+import server.server
+from lib.api import MemoryBox
 from lib.database import Neo4jClient
-from lib.settings import get_settings
+from lib.settings import Settings
 from server.server import (
     add_command,
     delete_command,
@@ -16,19 +21,54 @@ from server.server import (
 
 
 @pytest.fixture(scope="module")
-def neo4j_client():
-    """Create a Neo4j client for integration tests."""
-    settings = get_settings()
-    client = Neo4jClient(settings)
-    yield client
-    client.close()
+def neo4j_container() -> Generator[Neo4jContainer, None, None]:
+    """Start a Neo4j container for testing."""
+    with Neo4jContainer("neo4j:5-community") as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def neo4j_settings(neo4j_container: Neo4jContainer) -> Settings:
+    """Create settings for Neo4j test database."""
+    return Settings(
+        neo4j_uri=neo4j_container.get_connection_url(),
+        neo4j_user=neo4j_container.username,
+        neo4j_password=neo4j_container.password,
+        neo4j_database="neo4j",
+    )
+
+
+@pytest.fixture
+def test_memory_box(neo4j_settings: Settings) -> Generator[MemoryBox, None, None]:
+    """Create a MemoryBox instance using test container settings."""
+    mb = MemoryBox(settings=neo4j_settings)
+
+    # Clean before test
+    with mb._client.driver.session(database=mb._client.database) as session:
+        session.run("MATCH (n) DETACH DELETE n")
+
+    yield mb
+
+    # Clean after test
+    with mb._client.driver.session(database=mb._client.database) as session:
+        session.run("MATCH (n) DETACH DELETE n")
+
+    mb.close()
+
+
+@pytest.fixture
+def neo4j_client(test_memory_box: MemoryBox) -> Neo4jClient:
+    """Get the Neo4jClient from the test MemoryBox."""
+    return test_memory_box._client
 
 
 @pytest.fixture(autouse=True)
-def clean_database(neo4j_client):
-    """Clean the database before each test."""
-    with neo4j_client.driver.session(database=neo4j_client.database) as session:
-        session.run("MATCH (n) DETACH DELETE n")
+def patch_server_memory_box(test_memory_box: MemoryBox):
+    """Patch the global memory_box in server.server to use test container."""
+    original = server.server.memory_box
+    server.server.memory_box = test_memory_box
+    yield
+    server.server.memory_box = original
 
 
 class TestMCPServerIntegration:
@@ -47,8 +87,10 @@ class TestMCPServerIntegration:
 
         # Search for the command
         search_result = search_commands.fn(query="push")
-        assert "git push origin main" in search_result
-        assert "Push changes to main branch" in search_result
+        assert isinstance(search_result, list)
+        assert len(search_result) > 0
+        assert any("git push origin main" in cmd["command"] for cmd in search_result)
+        assert any("Push changes to main branch" in cmd["description"] for cmd in search_result)
 
     def test_add_get_and_delete_command(self, neo4j_client):
         """Test the full lifecycle via MCP: add, get, delete."""
@@ -114,18 +156,22 @@ class TestMCPServerIntegration:
 
         # Search by tags
         result = search_commands.fn(tags=["filesystem"])
-        assert "ls -la" in result
-        assert "grep -r" in result
+        assert isinstance(result, list)
+        assert any("ls -la" in cmd["command"] for cmd in result)
+        assert any("grep -r" in cmd["command"] for cmd in result)
 
         # Search by category
         result = search_commands.fn(category="navigation")
-        assert "ls -la" in result
-        assert "grep -r" not in result
+        assert isinstance(result, list)
+        assert any("ls -la" in cmd["command"] for cmd in result)
+        assert not any("grep -r" in cmd["command"] for cmd in result)
 
         # Search by multiple tags (OR operation - both commands have at least one tag)
         result = search_commands.fn(tags=["filesystem", "search"])
-        assert "grep -r" in result
-        assert "ls -la" in result  # Also matches because it has "filesystem" tag
+        assert isinstance(result, list)
+        assert any("grep -r" in cmd["command"] for cmd in result)
+        # Also matches because it has "filesystem" tag
+        assert any("ls -la" in cmd["command"] for cmd in result)
 
     def test_list_tags(self, neo4j_client):
         """Test listing all tags via MCP."""
@@ -211,13 +257,15 @@ class TestMCPServerIntegration:
 
         # Search for Linux commands
         result = search_commands.fn(os="linux")
-        assert "apt update" in result
-        assert "brew update" not in result
+        assert isinstance(result, list)
+        assert any("apt update" in cmd["command"] for cmd in result)
+        assert not any("brew update" in cmd["command"] for cmd in result)
 
         # Search for macOS commands
         result = search_commands.fn(os="macos")
-        assert "brew update" in result
-        assert "apt update" not in result
+        assert isinstance(result, list)
+        assert any("brew update" in cmd["command"] for cmd in result)
+        assert not any("apt update" in cmd["command"] for cmd in result)
 
     def test_search_with_project_type_filter(self, neo4j_client):
         """Test searching with project type filter via MCP."""
@@ -237,13 +285,15 @@ class TestMCPServerIntegration:
 
         # Search for Node.js commands
         result = search_commands.fn(project_type="nodejs")
-        assert "npm run build" in result
-        assert "cargo build" not in result
+        assert isinstance(result, list)
+        assert any("npm run build" in cmd["command"] for cmd in result)
+        assert not any("cargo build" in cmd["command"] for cmd in result)
 
         # Search for Rust commands
         result = search_commands.fn(project_type="rust")
-        assert "cargo build" in result
-        assert "npm run build" not in result
+        assert isinstance(result, list)
+        assert any("cargo build" in cmd["command"] for cmd in result)
+        assert not any("npm run build" in cmd["command"] for cmd in result)
 
     def test_search_with_limit(self, neo4j_client):
         """Test search with limit parameter via MCP."""
@@ -261,8 +311,8 @@ class TestMCPServerIntegration:
         # Should contain at most 3 commands
         assert result.count("echo 'test") <= 3
 
-    def test_use_count_tracking(self, neo4j_client):
-        """Test that retrieving a command increments use count via MCP."""
+    def test_execution_count_not_incremented_by_retrieval(self, neo4j_client):
+        """Test that retrieving a command does NOT increment execution count via MCP."""
         # Add a command
         add_result = add_command.fn(
             command="systemctl status",
@@ -278,13 +328,13 @@ class TestMCPServerIntegration:
                 command_id = line.split("ID:")[-1].strip()
                 break
 
-        # Get the command multiple times
+        # Get the command multiple times - should NOT increment execution_count
         for _ in range(3):
             get_command_by_id.fn(command_id=command_id)
 
-        # Get command details and check use count
+        # Get command details and check execution count is still 0
         result = get_command_by_id.fn(command_id=command_id)
-        assert "Used: 4 time(s)" in result  # 3 previous calls + this one
+        assert "Executed: 0 time(s)" in result  # Not incremented by retrieval
 
     def test_add_command_with_all_fields(self, neo4j_client):
         """Test adding a command with all optional fields via MCP."""
@@ -302,8 +352,9 @@ class TestMCPServerIntegration:
 
         # Search for it to verify all fields
         search_result = search_commands.fn(query="docker build")
-        assert "docker build" in search_result
-        assert "Build Docker image" in search_result
+        assert isinstance(search_result, list)
+        assert any("docker build" in cmd["command"] for cmd in search_result)
+        assert any("Build Docker image" in cmd["description"] for cmd in search_result)
 
     def test_search_with_query_and_filters(self, neo4j_client):
         """Test combining query search with filters via MCP."""
@@ -332,14 +383,16 @@ class TestMCPServerIntegration:
 
         # Search with both query and filters
         result = search_commands.fn(query="commit", tags=["git"], category="version-control")
-        assert "git commit" in result
-        assert "git push" not in result
-        assert "svn commit" not in result
+        assert isinstance(result, list)
+        assert any("git commit" in cmd["command"] for cmd in result)
+        assert not any("git push" in cmd["command"] for cmd in result)
+        assert not any("svn commit" in cmd["command"] for cmd in result)
 
     def test_empty_search_results(self, neo4j_client):
         """Test handling of empty search results via MCP."""
         result = search_commands.fn(query="nonexistent_command_xyz")
-        assert "No commands found" in result
+        assert isinstance(result, list)
+        assert len(result) == 0
 
     def test_empty_tags_list(self, neo4j_client):
         """Test listing tags when none exist via MCP."""
